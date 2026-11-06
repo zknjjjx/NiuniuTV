@@ -677,6 +677,7 @@ const PAGES = {
       <div class="setrow f" id="sRefresh"><span>刷新片源</span><small>${SRC.list.length} 个采集站 · ${esc(SRC.from.replace(/^https?:\/\//, "").slice(0, 60))}</small></div>
       <div class="setrow f" id="sUrl"><span>片源地址</span><small>${esc(custom || "默认：zknjjjx/tvbox 的 cmstv.json（自动加速）")}</small></div>
       <div class="setrow f" id="sReset"><span>恢复默认片源</span><small>清掉自定义地址</small></div>
+      <div class="setrow f" id="sFx"><span>背景动效</span><small>${cfg.get("fx", "1") === "0" ? "已关闭（更省性能）" : "已开启 · 老电视卡顿可关闭"}</small></div>
       <div class="setrow f" id="sClear"><span>清除观看记录</span><small>${histAll().length} 条</small></div>
       <div class="setrow" style="opacity:.6"><span>播放说明</span><small>自动测速挑最快源；起播 12 秒没画面或卡住 20 秒自动换源；播放中按 ▲ 选集换源</small></div></div>`;
     $("#sRefresh")._ok = async () => { toast("正在刷新片源…"); await loadSources(true); toast(`片源已更新：${SRC.list.length} 个`); render("settings"); };
@@ -689,6 +690,7 @@ const PAGES = {
       $("#uOk")._ok = async () => { const v = $("#uIn").value.trim(); cfg.set("srcUrl", v === DEF_SRC ? "" : v); closeLayer(); toast("正在加载新片源…"); await loadSources(true); toast(`片源：${SRC.list.length} 个`); render("settings"); };
     };
     $("#sReset")._ok = async () => { cfg.set("srcUrl", ""); await loadSources(true); toast("已恢复默认片源"); render("settings"); };
+    $("#sFx")._ok = () => { const on = cfg.get("fx", "1") === "0"; cfg.set("fx", on ? "1" : "0"); document.body.classList.toggle("nofx", !on); toast(on ? "背景动效已开启" : "背景动效已关闭"); render("settings"); F.set($("#sFx")); };
     $("#sClear")._ok = () => { histAll().forEach(h => APP && NN.delHistory(h.key)); toast("已清除"); render("settings"); };
     F.set($("#sRefresh"));
   },
@@ -728,6 +730,7 @@ window.nnMenu = () => { if (F.cur && F.cur._menu) F.cur._menu(); };
 function clock() { const d = new Date(); $("#clock").textContent = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; }
 function boot() {
   fit();
+  if (cfg.get("fx", "1") === "0") document.body.classList.add("nofx");
   window.addEventListener("resize", fit);
   $("#tabs").innerHTML = TABS.map(t => `<div class="tab f" data-k="${t[0]}">${t[1]}</div>`).join("");
   $$("#tabs .tab").forEach(t => {

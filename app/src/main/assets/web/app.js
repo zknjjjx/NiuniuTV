@@ -1014,6 +1014,7 @@ const PAGES = {
       <div class="setrow f" id="sRefresh"><span>\u5237\u65B0\u7247\u6E90</span><small>${SRC.list.length} \u4E2A\u91C7\u96C6\u7AD9 \xB7 ${esc(SRC.from.replace(/^https?:\/\//, "").slice(0, 60))}</small></div>
       <div class="setrow f" id="sUrl"><span>\u7247\u6E90\u5730\u5740</span><small>${esc(custom || "\u9ED8\u8BA4\uFF1Azknjjjx/tvbox \u7684 cmstv.json\uFF08\u81EA\u52A8\u52A0\u901F\uFF09")}</small></div>
       <div class="setrow f" id="sReset"><span>\u6062\u590D\u9ED8\u8BA4\u7247\u6E90</span><small>\u6E05\u6389\u81EA\u5B9A\u4E49\u5730\u5740</small></div>
+      <div class="setrow f" id="sFx"><span>\u80CC\u666F\u52A8\u6548</span><small>${cfg.get("fx", "1") === "0" ? "\u5DF2\u5173\u95ED\uFF08\u66F4\u7701\u6027\u80FD\uFF09" : "\u5DF2\u5F00\u542F \xB7 \u8001\u7535\u89C6\u5361\u987F\u53EF\u5173\u95ED"}</small></div>
       <div class="setrow f" id="sClear"><span>\u6E05\u9664\u89C2\u770B\u8BB0\u5F55</span><small>${histAll().length} \u6761</small></div>
       <div class="setrow" style="opacity:.6"><span>\u64AD\u653E\u8BF4\u660E</span><small>\u81EA\u52A8\u6D4B\u901F\u6311\u6700\u5FEB\u6E90\uFF1B\u8D77\u64AD 12 \u79D2\u6CA1\u753B\u9762\u6216\u5361\u4F4F 20 \u79D2\u81EA\u52A8\u6362\u6E90\uFF1B\u64AD\u653E\u4E2D\u6309 \u25B2 \u9009\u96C6\u6362\u6E90</small></div></div>`;
       $("#sRefresh")._ok = () => __async(this, null, function* () {
@@ -1044,6 +1045,14 @@ const PAGES = {
         toast("\u5DF2\u6062\u590D\u9ED8\u8BA4\u7247\u6E90");
         render("settings");
       });
+      $("#sFx")._ok = () => {
+        const on = cfg.get("fx", "1") === "0";
+        cfg.set("fx", on ? "1" : "0");
+        document.body.classList.toggle("nofx", !on);
+        toast(on ? "\u80CC\u666F\u52A8\u6548\u5DF2\u5F00\u542F" : "\u80CC\u666F\u52A8\u6548\u5DF2\u5173\u95ED");
+        render("settings");
+        F.set($("#sFx"));
+      };
       $("#sClear")._ok = () => {
         histAll().forEach((h) => APP && NN.delHistory(h.key));
         toast("\u5DF2\u6E05\u9664");
@@ -1091,6 +1100,7 @@ function clock() {
 }
 function boot() {
   fit();
+  if (cfg.get("fx", "1") === "0") document.body.classList.add("nofx");
   window.addEventListener("resize", fit);
   $("#tabs").innerHTML = TABS.map((t) => `<div class="tab f" data-k="${t[0]}">${t[1]}</div>`).join("");
   $$("#tabs .tab").forEach((t) => {
