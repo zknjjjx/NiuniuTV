@@ -193,3 +193,11 @@ img{display:block}
 @keyframes flow{from{background-position:-60% 0}to{background-position:160% 0}}
 body.nofx #bg .aur,body.nofx #bg .bgl.on,body.nofx #bg .spark i,body.nofx #top:after{animation:none}
 body.nofx #bg .spark{display:none}
+
+/* 浏览时只有晶莹星光背景；进详情才铺海报 */
+#bg .bgl{transition:opacity .6s ease}
+body:not(.poster) #bg .vig{opacity:0}
+#bg .vig{transition:opacity .6s}
+#bg:before{content:"";position:absolute;left:0;top:0;right:0;bottom:0;background:radial-gradient(70% 60% at 50% 0%,rgba(40,44,62,.9),transparent 70%),linear-gradient(180deg,#12131b 0%,#0b0c10 70%)}
+body:not(.poster) #bg .aur{background:radial-gradient(42% 34% at 16% 14%,rgba(255,90,54,.24),transparent 62%),radial-gradient(38% 32% at 84% 26%,rgba(120,90,255,.22),transparent 62%),radial-gradient(44% 34% at 50% 94%,rgba(255,181,71,.16),transparent 62%),radial-gradient(30% 26% at 60% 55%,rgba(80,170,255,.08),transparent 62%)}
+.scroll.home .row h3{padding-top:.2rem}

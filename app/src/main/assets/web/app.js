@@ -446,7 +446,13 @@ function fit() {
   document.documentElement.style.fontSize = remPx + "px";
 }
 let bgI = 0, bgUrl = "";
+function clearBg() {
+  bgUrl = "";
+  $$("#bg .bgl").forEach((l) => l.classList.remove("on"));
+  document.body.classList.remove("poster");
+}
 function setBg(url) {
+  document.body.classList.add("poster");
   if (!url || url === bgUrl) return;
   bgUrl = url;
   const ls = $$("#bg .bgl"), img = new Image();
@@ -476,6 +482,7 @@ function render(name, arg, restore) {
   const tk = name === "cat" ? arg : name;
   $$("#tabs .tab").forEach((t) => t.classList.toggle("on", t.dataset.k === tk));
   $("#top").classList.remove("hide");
+  if (name !== "detail") clearBg();
   const fn = PAGES[name];
   if (!F.hold) {
     if (F.cur) F.cur.classList.remove("focus");
@@ -494,18 +501,39 @@ window.nnBack = function() {
     render(p.name, p.arg, p);
     return true;
   }
-  if (route && route.name !== "home") {
-    go("home", null, true);
-    return true;
-  }
-  const homeTab = $('#tabs .tab[data-k="home"]');
-  if (F.cur !== homeTab) {
+  const cur = F.cur && document.contains(F.cur) ? F.cur : null;
+  const toTop = () => {
     const sc = $(".scroll");
     if (sc) {
       sc._y = 0;
       sc.style.transform = "translateY(0)";
       $$(".row", sc).forEach((r) => r.classList.remove("past"));
     }
+    $("#top").classList.remove("hide");
+  };
+  const chip = $("#page .chip.on");
+  if (cur && chip && !cur.closest("#top") && !cur.classList.contains("chip")) {
+    toTop();
+    F.set(chip, true);
+    return true;
+  }
+  const tabOn = $("#tabs .tab.on");
+  if (cur && !cur.closest("#top") && tabOn) {
+    toTop();
+    F.set(tabOn, true);
+    return true;
+  }
+  const homeTab = $('#tabs .tab[data-k="home"]');
+  if (route && route.name !== "home") {
+    F.hold = homeTab;
+    F.set(homeTab, true);
+    stack.length = 0;
+    route = { name: "home" };
+    render("home");
+    return true;
+  }
+  if (F.cur !== homeTab) {
+    toTop();
     F.set(homeTab, true);
     return true;
   }
@@ -524,6 +552,8 @@ window.nnRemote = function(act, v) {
       route = { name: "search", arg: v };
       render("search", v);
       toast("\u6536\u5230\u641C\u7D22\uFF1A" + v);
+    } else if (act === "toast") {
+      toast(v);
     } else if (act === "hist") {
       toast("\u89C2\u770B\u8BB0\u5F55\u5DF2\u6E05\u9664");
       if (route && (route.name === "settings" || route.name === "history" || route.name === "home")) render(route.name);
@@ -625,7 +655,7 @@ function refreshHistory() {
   if (box) {
     const h = histAll().slice(0, 16);
     box.innerHTML = h.map(histCard).join("");
-    bindCards(box, heroFocus);
+    bindCards(box);
   }
 }
 const heroInfo = {};
@@ -657,10 +687,9 @@ function heroFocus(c) {
 }
 const PAGES = {
   home(tok, _, restore) {
-    $("#page").innerHTML = `<section class="hero"><h1>\u599E\u599E\u5F71\u89C6</h1><div class="meta"></div><div class="intro">\u6B63\u5728\u52A0\u8F7D\u4ECA\u65E5\u70ED\u95E8\u2026</div><div class="hint">\u2191 \u9876\u90E8\u83DC\u5355\u3000\xB7\u3000OK \u67E5\u770B\u8BE6\u60C5\u3000\xB7\u3000\u8FD4\u56DE\u952E\u9000\u51FA</div></section>
-      <div class="scroll home" data-lock="row" data-pad="20.5"><div style="height:20.5rem"></div>
+    $("#page").innerHTML = `<div class="scroll home" data-lock="row" data-pad="6.2"><div style="height:6.2rem"></div>
       ${HOME_ROWS.map((r, i) => rowHTML("row" + i, r[0], skel(8))).join("")}</div>`;
-    bindCards($("#page"), heroFocus);
+    bindCards($("#page"));
     let focused = false;
     const focusFirst = () => {
       if (focused || tok !== routeTok) return;
@@ -674,12 +703,8 @@ const PAGES = {
         if (tok !== routeTok) return;
         const t = $(`#row${i} .track`);
         t.innerHTML = d.items.length ? d.items.map((it) => card(Object.assign(it, { type: r[1] === "tv" ? "tv" : it.type }), { sub: short(it.sub).split(" \xB7 ")[0] || it.ep })).join("") : `<div class="empty">\u6682\u65F6\u62FF\u4E0D\u5230\u8C46\u74E3\u6570\u636E</div>`;
-        bindCards(t, heroFocus);
-        if (i === 0) {
-          const fc = $("#page .card.f");
-          if (fc) heroFocus(fc);
-          focusFirst();
-        }
+        bindCards(t);
+        if (i === 0) focusFirst();
       }).catch(() => {
         const t = $(`#row${i} .track`);
         if (t) t.innerHTML = `<div class="empty">\u8C46\u74E3\u6570\u636E\u52A0\u8F7D\u5931\u8D25\uFF0C\u7A0D\u540E\u518D\u8BD5</div>`;
@@ -708,7 +733,6 @@ const PAGES = {
         if (first) grid.innerHTML = "";
         grid.insertAdjacentHTML("beforeend", d.items.map((it) => card(Object.assign(it, { type: c[1] === "tv" ? "tv" : it.type }), { sub: short(it.sub).split(" \xB7 ")[0] || it.ep, cls: "grid-item" })).join(""));
         bindCards(grid, (el) => {
-          setBg(el.dataset.pic);
           const items = $$(".card", grid);
           if (items.indexOf(el) > items.length - 15) load();
         });
@@ -721,16 +745,30 @@ const PAGES = {
       }
       busy = false;
     });
+    const pick = (ch) => {
+      if (+ch.dataset.i === ci) return;
+      ci = +ch.dataset.i;
+      store.set("chip:" + key, ci);
+      $$(".chip").forEach((x) => x.classList.toggle("on", x === ch));
+      start = 0;
+      end = false;
+      busy = false;
+      my++;
+      grid.innerHTML = skel(14);
+      load(true);
+    };
     $$(".chip", $("#page")).forEach((ch) => {
+      ch._onfocus = () => {
+        clearTimeout(pick._t);
+        pick._t = setTimeout(() => {
+          if (F.cur === ch) pick(ch);
+        }, 280);
+      };
       ch._ok = () => {
-        ci = +ch.dataset.i;
-        store.set("chip:" + key, ci);
-        $$(".chip").forEach((x) => x.classList.toggle("on", x === ch));
-        start = 0;
-        end = false;
-        busy = false;
-        grid.innerHTML = skel(14);
-        load(true);
+        clearTimeout(pick._t);
+        pick(ch);
+        const c = $("#grid .card.f");
+        if (c) F.set(c);
       };
     });
     F.set($(".chip.on"));
@@ -952,7 +990,7 @@ const PAGES = {
         const items = yield dbSearch(v);
         if (tok !== routeTok || me !== my) return;
         $("#sres").innerHTML = items.length ? `<div class="grid">${items.map((it) => card(it, { sub: String(it.sub).split(" / ")[0], cls: "grid-item" })).join("")}</div>` : `<div class="empty">\u8C46\u74E3\u6CA1\u641C\u5230\u300C${esc(v)}\u300D\uFF0C\u6362\u4E2A\u8BF4\u6CD5\u8BD5\u8BD5</div>`;
-        bindCards($("#sres"), (el) => setBg(el.dataset.pic));
+        bindCards($("#sres"));
       } catch (e) {
         $("#sres").innerHTML = `<div class="empty">\u641C\u7D22\u5931\u8D25\uFF0C\u7A0D\u540E\u518D\u8BD5</div>`;
       }
@@ -961,7 +999,7 @@ const PAGES = {
       dbList("movie", "\u70ED\u95E8", "\u5168\u90E8", 0, 14).then((d) => {
         if (tok !== routeTok || input.value.trim()) return;
         $("#sres").innerHTML = `<div class="row" style="padding-top:.6rem"><h3>\u5927\u5BB6\u90FD\u5728\u770B</h3></div><div class="grid">${d.items.map((it) => card(it, { sub: short(it.sub).split(" \xB7 ")[0], cls: "grid-item" })).join("")}</div>`;
-        bindCards($("#sres"), (el) => setBg(el.dataset.pic));
+        bindCards($("#sres"));
       }).catch(() => {
       });
     };
@@ -989,7 +1027,7 @@ const PAGES = {
     const list = histAll();
     $("#page").innerHTML = `<div class="scroll" data-pad="6"><div class="pagehead sec"><h2>\u89C2\u770B\u8BB0\u5F55</h2><span>${list.length ? "\u6309\u83DC\u5355\u952E\u5220\u9664\u5F53\u524D\u8FD9\u6761" : ""}</span></div>
       <div class="grid">${list.length ? list.map((h) => histCard(h, "grid-item")).join("") : `<div class="empty">\u8FD8\u6CA1\u6709\u770B\u8FC7\u7684\u7247\u5B50</div>`}</div></div>`;
-    bindCards($("#page"), (el) => setBg(el.dataset.pic));
+    bindCards($("#page"));
     $$("#page .card").forEach((c, i) => {
       c._menu = () => {
         if (APP) NN.delHistory(list[i].key);
@@ -1009,7 +1047,7 @@ const PAGES = {
         lan = APP && NN.lan ? JSON.parse(NN.lan()) : null;
       } catch (e) {
       }
-      $("#page").innerHTML = `${lan && lan.url ? `<div class="lan"><b>\u624B\u673A / \u7535\u8111\u626B\u7801\u8BBE\u7F6E</b><img src="${lan.qr}"><div class="u">${esc(lan.url)}</div><small>\u540C\u4E00\u5C40\u57DF\u7F51\u5185\u7528\u6D4F\u89C8\u5668\u6253\u5F00<br>\u53EF\u6539\u7247\u6E90\u3001\u63A8\u9001\u641C\u7D22\u3001\u6E05\u8BB0\u5F55</small></div>` : `<div class="lan"><b>\u5C40\u57DF\u7F51\u8BBE\u7F6E</b><small>\u6CA1\u8FDE\u4E0A\u5C40\u57DF\u7F51\uFF0C\u6682\u4E0D\u53EF\u7528</small></div>`}
+      $("#page").innerHTML = `${lan && lan.url ? `<div class="lan"><b>\u624B\u673A / \u7535\u8111\u626B\u7801\u8BBE\u7F6E</b><img src="${lan.qr}"><div class="u">${esc(lan.url)}</div><small>\u540C\u4E00\u5C40\u57DF\u7F51\u5185\u7528\u6D4F\u89C8\u5668\u6253\u5F00<br>\u53EF\u63A8\u9001\u5B89\u88C5/\u5347\u7EA7 App\u3001\u6539\u7247\u6E90\u3001\u63A8\u9001\u641C\u7D22</small></div>` : `<div class="lan"><b>\u5C40\u57DF\u7F51\u8BBE\u7F6E</b><small>\u6CA1\u8FDE\u4E0A\u5C40\u57DF\u7F51\uFF0C\u6682\u4E0D\u53EF\u7528</small></div>`}
       <div class="scroll setwrap" data-pad="6"><div class="pagehead sec"><h2>\u8BBE\u7F6E</h2><span>\u7248\u672C ${APP ? esc(NN.version()) : "dev"}</span></div>
       <div class="setrow f" id="sRefresh"><span>\u5237\u65B0\u7247\u6E90</span><small>${SRC.list.length} \u4E2A\u91C7\u96C6\u7AD9 \xB7 ${esc(SRC.from.replace(/^https?:\/\//, "").slice(0, 60))}</small></div>
       <div class="setrow f" id="sUrl"><span>\u7247\u6E90\u5730\u5740</span><small>${esc(custom || "\u9ED8\u8BA4\uFF1Azknjjjx/tvbox \u7684 cmstv.json\uFF08\u81EA\u52A8\u52A0\u901F\uFF09")}</small></div>
@@ -1074,7 +1112,7 @@ document.addEventListener("keydown", (e) => {
     const before = F.cur;
     F.user = true;
     if (dir === "down" && before && before.closest("#tabs")) {
-      const tgt = $("#grid .card.f") || $("#page .card.f") || null;
+      const tgt = $("#page .chip.on") || $("#page .card.f") || $("#page .f");
       if (tgt && F.visible(tgt)) {
         F.hold = null;
         F.set(tgt);

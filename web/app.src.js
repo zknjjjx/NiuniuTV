@@ -288,7 +288,9 @@ function fit() { remPx = window.innerWidth / 74; document.documentElement.style.
 
 /* 背景氛围图 */
 let bgI = 0, bgUrl = "";
+function clearBg() { bgUrl = ""; $$("#bg .bgl").forEach(l => l.classList.remove("on")); document.body.classList.remove("poster"); }
 function setBg(url) {
+  document.body.classList.add("poster");
   if (!url || url === bgUrl) return;
   bgUrl = url;
   const ls = $$("#bg .bgl"), img = new Image();
@@ -311,6 +313,7 @@ function render(name, arg, restore) {
   const tk = name === "cat" ? arg : name;
   $$("#tabs .tab").forEach(t => t.classList.toggle("on", t.dataset.k === tk));
   $("#top").classList.remove("hide");
+  if (name !== "detail") clearBg();
   const fn = PAGES[name];
   if (!F.hold) { if (F.cur) F.cur.classList.remove("focus"); F.cur = null; }
   fn(routeTok, arg, restore);
@@ -323,19 +326,24 @@ window.nnBack = function () {
     render(p.name, p.arg, p);
     return true;
   }
-  if (route && route.name !== "home") { go("home", null, true); return true; }
+  const cur = F.cur && document.contains(F.cur) ? F.cur : null;
+  const toTop = () => { const sc = $(".scroll"); if (sc) { sc._y = 0; sc.style.transform = "translateY(0)"; $$(".row", sc).forEach(r => r.classList.remove("past")); } $("#top").classList.remove("hide"); };
+  // 片子 → 二级菜单
+  const chip = $("#page .chip.on");
+  if (cur && chip && !cur.closest("#top") && !cur.classList.contains("chip")) { toTop(); F.set(chip, true); return true; }
+  // 二级菜单/内容 → 一级菜单
+  const tabOn = $("#tabs .tab.on");
+  if (cur && !cur.closest("#top") && tabOn) { toTop(); F.set(tabOn, true); return true; }
+  // 一级菜单 → 首页
   const homeTab = $('#tabs .tab[data-k="home"]');
-  if (F.cur !== homeTab) {  // 首页：先回到顶部，再按一次才提示退出
-    const sc = $(".scroll");
-    if (sc) { sc._y = 0; sc.style.transform = "translateY(0)"; $$(".row", sc).forEach(r => r.classList.remove("past")); }
-    F.set(homeTab, true);
-    return true;
-  }
+  if (route && route.name !== "home") { F.hold = homeTab; F.set(homeTab, true); stack.length = 0; route = { name: "home" }; render("home"); return true; }
+  if (F.cur !== homeTab) { toTop(); F.set(homeTab, true); return true; }
   return false;
 };
 window.nnRemote = async function (act, v) {  // 手机/电脑通过局域网发来的指令
   if (act === "src") { toast("手机已修改片源，正在加载…"); await loadSources(true); toast(`片源：${SRC.list.length} 个`); if (route && route.name === "settings") render("settings"); }
   else if (act === "search") { F.hold = null; stack.length = 0; route = { name: "search", arg: v }; render("search", v); toast("收到搜索：" + v); }
+  else if (act === "toast") { toast(v); }
   else if (act === "hist") { toast("观看记录已清除"); if (route && (route.name === "settings" || route.name === "history" || route.name === "home")) render(route.name); }
 };
 window.nnState = () => JSON.stringify({ n: SRC.list.length, from: SRC.from });
@@ -406,7 +414,7 @@ function histCard(h, cls) {
 }
 function refreshHistory() {
   const box = $("#rowHist .track");
-  if (box) { const h = histAll().slice(0, 16); box.innerHTML = h.map(histCard).join(""); bindCards(box, heroFocus); }
+  if (box) { const h = histAll().slice(0, 16); box.innerHTML = h.map(histCard).join(""); bindCards(box); }
 }
 
 const heroInfo = {};
@@ -434,10 +442,9 @@ function heroFocus(c) {
 
 const PAGES = {
   home(tok, _, restore) {
-    $("#page").innerHTML = `<section class="hero"><h1>妞妞影视</h1><div class="meta"></div><div class="intro">正在加载今日热门…</div><div class="hint">↑ 顶部菜单　·　OK 查看详情　·　返回键退出</div></section>
-      <div class="scroll home" data-lock="row" data-pad="20.5"><div style="height:20.5rem"></div>
+    $("#page").innerHTML = `<div class="scroll home" data-lock="row" data-pad="6.2"><div style="height:6.2rem"></div>
       ${HOME_ROWS.map((r, i) => rowHTML("row" + i, r[0], skel(8))).join("")}</div>`;
-    bindCards($("#page"), heroFocus);
+    bindCards($("#page"));
     let focused = false;
     const focusFirst = () => { if (focused || tok !== routeTok) return; focused = true; if (restore && restore.focus && document.contains(restore.focus)) F.set(restore.focus); else F.set($("#page .card.f")); };
     const loadRow = i => {
@@ -446,8 +453,8 @@ const PAGES = {
         if (tok !== routeTok) return;
         const t = $(`#row${i} .track`);
         t.innerHTML = d.items.length ? d.items.map(it => card(Object.assign(it, { type: r[1] === "tv" ? "tv" : it.type }), { sub: short(it.sub).split(" · ")[0] || it.ep })).join("") : `<div class="empty">暂时拿不到豆瓣数据</div>`;
-        bindCards(t, heroFocus);
-        if (i === 0) { const fc = $("#page .card.f"); if (fc) heroFocus(fc); focusFirst(); }
+        bindCards(t);
+        if (i === 0) focusFirst();
       }).catch(() => { const t = $(`#row${i} .track`); if (t) t.innerHTML = `<div class="empty">豆瓣数据加载失败，稍后再试</div>`; });
     };
     loadRow(0).then(() => { for (let i = 1; i < HOME_ROWS.length; i++) loadRow(i); });
@@ -471,7 +478,7 @@ const PAGES = {
         if (tok !== routeTok || me !== my) return;
         if (first) grid.innerHTML = "";
         grid.insertAdjacentHTML("beforeend", d.items.map(it => card(Object.assign(it, { type: c[1] === "tv" ? "tv" : it.type }), { sub: short(it.sub).split(" · ")[0] || it.ep, cls: "grid-item" })).join(""));
-        bindCards(grid, el => { setBg(el.dataset.pic); const items = $$(".card", grid); if (items.indexOf(el) > items.length - 15) load(); });
+        bindCards(grid, el => { const items = $$(".card", grid); if (items.indexOf(el) > items.length - 15) load(); });
         start += d.items.length;
         end = !d.items.length || (d.total && start >= d.total);
         $("#cnt").textContent = d.total ? `共 ${d.total} 部` : "";
@@ -479,12 +486,15 @@ const PAGES = {
       } catch (e) { if (first) grid.innerHTML = `<div class="empty">豆瓣数据加载失败</div>`; }
       busy = false;
     };
+    const pick = ch => {
+      if (+ch.dataset.i === ci) return;
+      ci = +ch.dataset.i; store.set("chip:" + key, ci);
+      $$(".chip").forEach(x => x.classList.toggle("on", x === ch));
+      start = 0; end = false; busy = false; my++; grid.innerHTML = skel(14); load(true);
+    };
     $$(".chip", $("#page")).forEach(ch => {
-      ch._ok = () => {
-        ci = +ch.dataset.i; store.set("chip:" + key, ci);
-        $$(".chip").forEach(x => x.classList.toggle("on", x === ch));
-        start = 0; end = false; busy = false; grid.innerHTML = skel(14); load(true);
-      };
+      ch._onfocus = () => { clearTimeout(pick._t); pick._t = setTimeout(() => { if (F.cur === ch) pick(ch); }, 280); };
+      ch._ok = () => { clearTimeout(pick._t); pick(ch); const c = $("#grid .card.f"); if (c) F.set(c); };
     });
     F.set($(".chip.on"));
     load(true);
@@ -641,14 +651,14 @@ const PAGES = {
         if (tok !== routeTok || me !== my) return;
         $("#sres").innerHTML = items.length ? `<div class="grid">${items.map(it => card(it, { sub: String(it.sub).split(" / ")[0], cls: "grid-item" })).join("")}</div>`
           : `<div class="empty">豆瓣没搜到「${esc(v)}」，换个说法试试</div>`;
-        bindCards($("#sres"), el => setBg(el.dataset.pic));
+        bindCards($("#sres"));
       } catch (e) { $("#sres").innerHTML = `<div class="empty">搜索失败，稍后再试</div>`; }
     };
     const hot = () => {
       dbList("movie", "热门", "全部", 0, 14).then(d => {
         if (tok !== routeTok || input.value.trim()) return;
         $("#sres").innerHTML = `<div class="row" style="padding-top:.6rem"><h3>大家都在看</h3></div><div class="grid">${d.items.map(it => card(it, { sub: short(it.sub).split(" · ")[0], cls: "grid-item" })).join("")}</div>`;
-        bindCards($("#sres"), el => setBg(el.dataset.pic));
+        bindCards($("#sres"));
       }).catch(() => {});
     };
     input.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(run, 700); });
@@ -662,7 +672,7 @@ const PAGES = {
     const list = histAll();
     $("#page").innerHTML = `<div class="scroll" data-pad="6"><div class="pagehead sec"><h2>观看记录</h2><span>${list.length ? "按菜单键删除当前这条" : ""}</span></div>
       <div class="grid">${list.length ? list.map(h => histCard(h, "grid-item")).join("") : `<div class="empty">还没有看过的片子</div>`}</div></div>`;
-    bindCards($("#page"), el => setBg(el.dataset.pic));
+    bindCards($("#page"));
     $$("#page .card").forEach((c, i) => { c._menu = () => { if (APP) NN.delHistory(list[i].key); toast("已删除"); render("history"); }; });
     F.set($("#page .card") || $("#tabs .tab.on"));
   },
@@ -672,7 +682,7 @@ const PAGES = {
     if (tok !== routeTok) return;
     const custom = cfg.get("srcUrl", "");
     let lan = null; try { lan = APP && NN.lan ? JSON.parse(NN.lan()) : null; } catch (e) {}
-    $("#page").innerHTML = `${lan && lan.url ? `<div class="lan"><b>手机 / 电脑扫码设置</b><img src="${lan.qr}"><div class="u">${esc(lan.url)}</div><small>同一局域网内用浏览器打开<br>可改片源、推送搜索、清记录</small></div>` : `<div class="lan"><b>局域网设置</b><small>没连上局域网，暂不可用</small></div>`}
+    $("#page").innerHTML = `${lan && lan.url ? `<div class="lan"><b>手机 / 电脑扫码设置</b><img src="${lan.qr}"><div class="u">${esc(lan.url)}</div><small>同一局域网内用浏览器打开<br>可推送安装/升级 App、改片源、推送搜索</small></div>` : `<div class="lan"><b>局域网设置</b><small>没连上局域网，暂不可用</small></div>`}
       <div class="scroll setwrap" data-pad="6"><div class="pagehead sec"><h2>设置</h2><span>版本 ${APP ? esc(NN.version()) : "dev"}</span></div>
       <div class="setrow f" id="sRefresh"><span>刷新片源</span><small>${SRC.list.length} 个采集站 · ${esc(SRC.from.replace(/^https?:\/\//, "").slice(0, 60))}</small></div>
       <div class="setrow f" id="sUrl"><span>片源地址</span><small>${esc(custom || "默认：zknjjjx/tvbox 的 cmstv.json（自动加速）")}</small></div>
@@ -708,8 +718,8 @@ document.addEventListener("keydown", e => {
     const dir = { 37: "left", 38: "up", 39: "right", 40: "down" }[k];
     const before = F.cur;
     F.user = true;
-    if (dir === "down" && before && before.closest("#tabs")) {  // 菜单往下：直接进片子
-      const tgt = $("#grid .card.f") || $("#page .card.f") || null;
+    if (dir === "down" && before && before.closest("#tabs")) {  // 一级菜单往下：二级菜单（分类页）或第一行片子
+      const tgt = $("#page .chip.on") || $("#page .card.f") || $("#page .f");
       if (tgt && F.visible(tgt)) { F.hold = null; F.set(tgt); } else F.move(dir);
     } else F.move(dir);
     F.user = false;

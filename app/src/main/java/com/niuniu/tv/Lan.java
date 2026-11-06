@@ -15,6 +15,8 @@ import org.json.JSONObject;
 
 import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Inet4Address;
@@ -123,6 +125,17 @@ public class Lan {
                 int i = h.indexOf(':');
                 if (i > 0 && h.substring(0, i).trim().equalsIgnoreCase("content-length")) len = Integer.parseInt(h.substring(i + 1).trim());
             }
+            if ("POST".equals(method) && path.startsWith("/api/apk")) {  // 推送安装包：边收边写文件
+                File f = Upd.target(ctx);
+                OutputStream fo = new FileOutputStream(f);
+                byte[] buf = new byte[65536]; long left = len; int r;
+                while (left > 0 && (r = in.read(buf, 0, (int) Math.min(buf.length, left))) > 0) { fo.write(buf, 0, r); left -= r; }
+                fo.close();
+                String res = left == 0 && len > 0 ? Upd.install(ctx, f, js) : "{\"ok\":false,\"msg\":\"上传不完整\"}";
+                send(s.getOutputStream(), 200, "application/json; charset=utf-8", res.getBytes("UTF-8"));
+                s.close();
+                return;
+            }
             byte[] body = new byte[Math.min(len, 65536)];
             int got = 0;
             while (got < body.length) { int r = in.read(body, got, body.length - got); if (r < 0) break; got += r; }
@@ -145,6 +158,13 @@ public class Lan {
                     js.run("window.nnRemote&&nnRemote('src')");
                 } else if (act.equals("search")) {
                     js.run("window.nnRemote&&nnRemote('search'," + JSONObject.quote(j.optString("q", "")) + ")");
+                } else if (act.equals("apkurl")) {
+                    final String u = j.optString("url", "").trim();
+                    js.run("window.nnRemote&&nnRemote('toast','正在下载安装包…')");
+                    String res = Upd.download(ctx, u, js);
+                    send(out, 200, "application/json; charset=utf-8", res.getBytes("UTF-8"));
+                    s.close();
+                    return;
                 } else if (act.equals("hist")) {
                     Hist.clear(ctx);
                     js.run("window.nnRemote&&nnRemote('hist')");
