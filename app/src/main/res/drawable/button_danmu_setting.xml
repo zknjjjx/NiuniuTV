@@ -3,10 +3,10 @@
     <item android:state_focused="true">
         <shape>
             <corners android:radius="@dimen/vs_6" />
-            <solid android:color="@color/dialog_control_bg_focused" />
+            <solid android:color="@color/nn_focus_bg" />
             <stroke
                 android:width="@dimen/vs_1"
-                android:color="@color/dialog_control_stroke_focused" />
+                android:color="@color/nn_ac" />
         </shape>
     </item>
     <item>

@@ -20,6 +20,8 @@ jobs:
           distribution: temurin
           java-version: 11
       - uses: gradle/actions/setup-gradle@v4
+      - name: local.properties
+        run: echo "sdk.dir=$ANDROID_HOME" > local.properties
       - name: 构建（java 版，含 armv7 + arm64）
         run: bash ./gradlew assembleJavaRelease --warning-mode none
       - name: 整理 APK

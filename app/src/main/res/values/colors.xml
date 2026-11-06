@@ -53,4 +53,7 @@
 
 
 
+    <color name="nn_ac">#FFFF5A36</color>
+    <color name="nn_ac2">#FFFFB547</color>
+    <color name="nn_focus_bg">#B3FF5A36</color>
 </resources>

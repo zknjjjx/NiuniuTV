@@ -66,6 +66,10 @@ public class App extends MultiDexApplication {
         Hawk.init(this).build();
         Hawk.put(HawkConfig.DEBUG_OPEN, false);
         Hawk.put(HawkConfig.PLAYER_IS_LIVE, false);
+        // 妞妞：首次启动内置妞妞配置
+        if (android.text.TextUtils.isEmpty(Hawk.get(HawkConfig.API_URL, ""))) {
+            Hawk.put(HawkConfig.API_URL, "https://cdn.jsdelivr.net/gh/zknjjjx/tvbox@main/niuniu.json");
+        }
         if (!Hawk.contains(HawkConfig.PLAY_TYPE)) {
             Hawk.put(HawkConfig.PLAY_TYPE, 2);
         } else if (Hawk.get(HawkConfig.PLAY_TYPE, 2) == 0) {
