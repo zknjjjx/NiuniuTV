@@ -74,7 +74,7 @@ class VodFallbackPolicy {
 
     private void fallbackToNextSource(boolean force) {
         if (!state.hasSources()) search(host.getVodName(), true);
-        else if (state.isAutoFallback() || force) nextSource();
+        else nextSource(); // 妞妞：播放失败一律自动换下一个同名源
     }
 
     private void nextSource() {

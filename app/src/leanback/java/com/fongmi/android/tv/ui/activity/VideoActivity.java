@@ -1341,7 +1341,24 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, 
 
     @Override
     protected void onError(String msg) {
+        disarmStallWatch();
         mVod.playbackError(msg);
+    }
+
+    // 妞妞：缓冲超过 STALL_MS 仍未开始播放，当作该源失败，自动换线路/换源
+    private static final long STALL_MS = 15000;
+    private final Runnable mStallTask = () -> {
+        if (isFinishing() || isPlayerPlaying()) return;
+        onError(getString(R.string.error_play_timeout));
+    };
+
+    private void armStallWatch() {
+        mBinding.getRoot().removeCallbacks(mStallTask);
+        mBinding.getRoot().postDelayed(mStallTask, STALL_MS);
+    }
+
+    private void disarmStallWatch() {
+        mBinding.getRoot().removeCallbacks(mStallTask);
     }
 
     @Override
@@ -1369,11 +1386,13 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, 
     protected void onStateChanged(int state) {
         switch (state) {
             case Player.STATE_BUFFERING:
+                armStallWatch();
                 if (isDiscMenuTransition()) hideProgress();
                 else showProgress();
                 mClock.setCallback(null);
                 break;
             case Player.STATE_READY:
+                disarmStallWatch();
                 hideProgress();
                 player().reset();
                 mClock.setCallback(this);
