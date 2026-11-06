@@ -1111,7 +1111,12 @@ document.addEventListener("keydown", (e) => {
     const dir = { 37: "left", 38: "up", 39: "right", 40: "down" }[k];
     const before = F.cur;
     F.user = true;
-    if (dir === "down" && before && before.closest("#tabs")) {
+    if (dir === "up" && before && before.classList.contains("chip") && before.closest("#page")) {
+      F.set($("#tabs .tab.on") || $("#tabs .tab"), true);
+    } else if (dir === "down" && before && before.classList.contains("chip") && before.closest("#page") && $("#grid .card.f")) {
+      clearTimeout(before._t);
+      F.set($("#grid .card.f"));
+    } else if (dir === "down" && before && before.closest("#tabs")) {
       const tgt = $("#page .chip.on") || $("#page .card.f") || $("#page .f");
       if (tgt && F.visible(tgt)) {
         F.hold = null;

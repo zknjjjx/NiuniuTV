@@ -718,7 +718,11 @@ document.addEventListener("keydown", e => {
     const dir = { 37: "left", 38: "up", 39: "right", 40: "down" }[k];
     const before = F.cur;
     F.user = true;
-    if (dir === "down" && before && before.closest("#tabs")) {  // 一级菜单往下：二级菜单（分类页）或第一行片子
+    if (dir === "up" && before && before.classList.contains("chip") && before.closest("#page")) {  // 二级菜单按上：回一级菜单
+      F.set($("#tabs .tab.on") || $("#tabs .tab"), true);
+    } else if (dir === "down" && before && before.classList.contains("chip") && before.closest("#page") && $("#grid .card.f")) {  // 二级菜单按下：进片子
+      clearTimeout(before._t); F.set($("#grid .card.f"));
+    } else if (dir === "down" && before && before.closest("#tabs")) {  // 一级菜单往下：二级菜单（分类页）或第一行片子
       const tgt = $("#page .chip.on") || $("#page .card.f") || $("#page .f");
       if (tgt && F.visible(tgt)) { F.hold = null; F.set(tgt); } else F.move(dir);
     } else F.move(dir);
