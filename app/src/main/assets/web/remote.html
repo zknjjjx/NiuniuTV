@@ -1,0 +1,40 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>妞妞影视 · 遥控设置</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:#0b0c10;color:#f3f1ee;padding:20px;max-width:640px;margin:0 auto}
+h1{font-size:22px;margin:6px 0 4px;background:linear-gradient(90deg,#ff5a36,#ffb547);-webkit-background-clip:text;color:transparent}
+.sub{opacity:.6;font-size:13px;margin-bottom:18px}
+.card{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:16px;margin-bottom:14px}
+.card h2{font-size:16px;margin:0 0 10px}.card p{font-size:13px;opacity:.7;margin:0 0 10px;line-height:1.6;word-break:break-all}
+input{width:100%;font-size:15px;padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,.2);background:rgba(0,0,0,.35);color:#fff;outline:none}
+input:focus{border-color:#ff5a36}
+.row{display:flex;gap:10px;margin-top:10px;flex-wrap:wrap}
+button{flex:1;min-width:120px;font-size:15px;padding:12px;border:0;border-radius:10px;background:rgba(255,255,255,.12);color:#fff;cursor:pointer}
+button.pri{background:linear-gradient(90deg,#ff5a36,#ffb547);color:#1b0d06;font-weight:700}
+#msg{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#222;padding:10px 18px;border-radius:20px;font-size:14px;opacity:0;transition:.3s}
+#msg.on{opacity:1}
+</style></head><body>
+<h1>妞妞影视 · 遥控设置</h1><div class="sub" id="ver">连接电视中…</div>
+<div class="card"><h2>推送搜索</h2><p>在这里打字，电视上直接搜索。</p>
+<input id="q" placeholder="片名 / 演员 / 导演"><div class="row"><button class="pri" onclick="search()">发到电视搜索</button></div></div>
+<div class="card"><h2>片源地址</h2><p id="srcInfo">—</p>
+<input id="url" placeholder="留空 = 默认（zknjjjx/tvbox 的 cmstv.json，自动加速）">
+<div class="row"><button class="pri" onclick="saveSrc()">保存并刷新</button><button onclick="document.getElementById('url').value='';saveSrc()">恢复默认</button></div></div>
+<div class="card"><h2>观看记录</h2><p id="histInfo">—</p><div class="row"><button onclick="clearHist()">清除全部观看记录</button></div></div>
+<div id="msg"></div>
+<script>
+function msg(t){var m=document.getElementById('msg');m.textContent=t;m.className='on';clearTimeout(msg.t);msg.t=setTimeout(function(){m.className=''},2200)}
+function post(p,o){return fetch('/api/'+p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(o||{})}).then(function(r){return r.json()})}
+function load(){fetch('/api/state').then(function(r){return r.json()}).then(function(s){
+  document.getElementById('ver').textContent='已连接 · 版本 '+s.version;
+  document.getElementById('url').value=s.srcUrl||'';
+  var st={};try{st=JSON.parse(s.src||'{}')}catch(e){}
+  document.getElementById('srcInfo').textContent=(st.n?('当前 '+st.n+' 个采集站 · 来自 '+(st.from||'')):'当前片源状态未知');
+  document.getElementById('histInfo').textContent='共 '+s.hist+' 条';
+}).catch(function(){document.getElementById('ver').textContent='连不上电视，请确认在同一局域网'})}
+function search(){var q=document.getElementById('q').value.trim();if(!q)return;post('search',{q:q}).then(function(){msg('已发到电视')})}
+function saveSrc(){post('src',{url:document.getElementById('url').value.trim()}).then(function(){msg('已保存，电视正在刷新片源');setTimeout(load,6000)})}
+function clearHist(){if(!confirm('确定清除全部观看记录？'))return;post('hist').then(function(){msg('已清除');load()})}
+document.getElementById('q').addEventListener('keydown',function(e){if(e.keyCode===13)search()});
+load();
+</script></body></html>

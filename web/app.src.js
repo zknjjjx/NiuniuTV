@@ -32,6 +32,10 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem("nn:" + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem("nn:" + k, JSON.stringify(v)); } catch (e) {} },
 };
+const cfg = {
+  get(k, d) { if (APP && NN.cfg) { const v = NN.cfg(k); return v === "" || v == null ? d : v; } return store.get(k, d); },
+  set(k, v) { if (APP && NN.setCfg) NN.setCfg(k, v || ""); else store.set(k, v); },
+};
 function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("on"), 2600); }
 
 /* ---------------- 豆瓣 ---------------- */
@@ -108,7 +112,7 @@ function parseSites(d) {
 }
 const SRC = { list: [], from: "", t: 0 };
 async function loadSources(force) {
-  const custom = store.get("srcUrl", "") || DEF_SRC;
+  const custom = cfg.get("srcUrl", "") || DEF_SRC;
   const cache = store.get("src", null);
   if (!force && cache && cache.url === custom && cache.list.length && Date.now() - cache.t < 12 * 3600e3) { Object.assign(SRC, cache); return SRC; }
   try {
@@ -125,6 +129,7 @@ async function loadSources(force) {
       } catch (e2) {}
     }
   }
+  try { if (APP && NN.setCfg) NN.setCfg("srcState", JSON.stringify({ n: SRC.list.length, from: SRC.from })); } catch (e) {}
   return SRC;
 }
 
@@ -190,9 +195,13 @@ function resolve(name, year, onFound) {
 const F = {
   cur: null,
   scope() { return $("#layer").classList.contains("on") ? $("#layer") : document; },
+  hold: null,  // 菜单预览中：页面加载时不抢焦点
   set(el, quiet) {
     if (!el) return;
+    if (F.hold && !F.user && !el.closest("#top") && !el.closest("#layer")) return;
+    if (F.hold && !el.closest("#top")) F.hold = null;
     if (F.cur) F.cur.classList.remove("focus");
+    F.prev = F.cur;
     F.cur = el;
     el.classList.add("focus");
     const g = el.closest("[data-g]");
@@ -275,7 +284,7 @@ const F = {
 };
 let remPx = 20;
 const rem = () => remPx;
-function fit() { remPx = window.innerWidth / 84; document.documentElement.style.fontSize = remPx + "px"; }
+function fit() { remPx = window.innerWidth / 74; document.documentElement.style.fontSize = remPx + "px"; }
 
 /* 背景氛围图 */
 let bgI = 0, bgUrl = "";
@@ -284,7 +293,7 @@ function setBg(url) {
   bgUrl = url;
   const ls = $$("#bg .bgl"), img = new Image();
   img.onload = () => { if (bgUrl !== url) return; bgI ^= 1; ls[bgI].style.backgroundImage = `url("${img.src}")`; ls[bgI].classList.add("on"); ls[bgI ^ 1].classList.remove("on"); };
-  img.src = url.replace(/\/[a-z]_ratio_poster\//, "/s_ratio_poster/");
+  img.src = url.replace(/\/[a-z]_ratio_poster\//, "/l_ratio_poster/");
 }
 
 /* ---------------- 路由 ---------------- */
@@ -303,8 +312,7 @@ function render(name, arg, restore) {
   $$("#tabs .tab").forEach(t => t.classList.toggle("on", t.dataset.k === tk));
   $("#top").classList.remove("hide");
   const fn = PAGES[name];
-  if (F.cur) F.cur.classList.remove("focus");
-  F.cur = null;
+  if (!F.hold) { if (F.cur) F.cur.classList.remove("focus"); F.cur = null; }
   fn(routeTok, arg, restore);
 }
 window.nnBack = function () {
@@ -325,6 +333,12 @@ window.nnBack = function () {
   }
   return false;
 };
+window.nnRemote = async function (act, v) {  // 手机/电脑通过局域网发来的指令
+  if (act === "src") { toast("手机已修改片源，正在加载…"); await loadSources(true); toast(`片源：${SRC.list.length} 个`); if (route && route.name === "settings") render("settings"); }
+  else if (act === "search") { F.hold = null; stack.length = 0; route = { name: "search", arg: v }; render("search", v); toast("收到搜索：" + v); }
+  else if (act === "hist") { toast("观看记录已清除"); if (route && (route.name === "settings" || route.name === "history" || route.name === "home")) render(route.name); }
+};
+window.nnState = () => JSON.stringify({ n: SRC.list.length, from: SRC.from });
 window.nnResume = function () {
   if (!route) return;
   if (route.name === "home") refreshHistory();
@@ -421,7 +435,7 @@ function heroFocus(c) {
 const PAGES = {
   home(tok, _, restore) {
     $("#page").innerHTML = `<section class="hero"><h1>妞妞影视</h1><div class="meta"></div><div class="intro">正在加载今日热门…</div><div class="hint">↑ 顶部菜单　·　OK 查看详情　·　返回键退出</div></section>
-      <div class="scroll home" data-lock="row" data-pad="24"><div style="height:24rem"></div>
+      <div class="scroll home" data-lock="row" data-pad="20.5"><div style="height:20.5rem"></div>
       ${HOME_ROWS.map((r, i) => rowHTML("row" + i, r[0], skel(8))).join("")}</div>`;
     bindCards($("#page"), heroFocus);
     let focused = false;
@@ -433,7 +447,7 @@ const PAGES = {
         const t = $(`#row${i} .track`);
         t.innerHTML = d.items.length ? d.items.map(it => card(Object.assign(it, { type: r[1] === "tv" ? "tv" : it.type }), { sub: short(it.sub).split(" · ")[0] || it.ep })).join("") : `<div class="empty">暂时拿不到豆瓣数据</div>`;
         bindCards(t, heroFocus);
-        if (i === 0) focusFirst();
+        if (i === 0) { const fc = $("#page .card.f"); if (fc) heroFocus(fc); focusFirst(); }
       }).catch(() => { const t = $(`#row${i} .track`); if (t) t.innerHTML = `<div class="empty">豆瓣数据加载失败，稍后再试</div>`; });
     };
     loadRow(0).then(() => { for (let i = 1; i < HOME_ROWS.length; i++) loadRow(i); });
@@ -656,8 +670,10 @@ const PAGES = {
   async settings(tok) {
     await loadSources();
     if (tok !== routeTok) return;
-    const custom = store.get("srcUrl", "");
-    $("#page").innerHTML = `<div class="scroll" data-pad="6"><div class="pagehead sec"><h2>设置</h2><span>版本 ${APP ? esc(NN.version()) : "dev"}</span></div>
+    const custom = cfg.get("srcUrl", "");
+    let lan = null; try { lan = APP && NN.lan ? JSON.parse(NN.lan()) : null; } catch (e) {}
+    $("#page").innerHTML = `${lan && lan.url ? `<div class="lan"><b>手机 / 电脑扫码设置</b><img src="${lan.qr}"><div class="u">${esc(lan.url)}</div><small>同一局域网内用浏览器打开<br>可改片源、推送搜索、清记录</small></div>` : `<div class="lan"><b>局域网设置</b><small>没连上局域网，暂不可用</small></div>`}
+      <div class="scroll setwrap" data-pad="6"><div class="pagehead sec"><h2>设置</h2><span>版本 ${APP ? esc(NN.version()) : "dev"}</span></div>
       <div class="setrow f" id="sRefresh"><span>刷新片源</span><small>${SRC.list.length} 个采集站 · ${esc(SRC.from.replace(/^https?:\/\//, "").slice(0, 60))}</small></div>
       <div class="setrow f" id="sUrl"><span>片源地址</span><small>${esc(custom || "默认：zknjjjx/tvbox 的 cmstv.json（自动加速）")}</small></div>
       <div class="setrow f" id="sReset"><span>恢复默认片源</span><small>清掉自定义地址</small></div>
@@ -670,9 +686,9 @@ const PAGES = {
         <div class="acts" style="margin-top:1.6rem"><div class="btn pri f" id="uOk">保存</div><div class="btn f" id="uNo">取消</div></div></div>`, "#uBox");
       $("#uBox")._ok = () => $("#uIn").focus();
       $("#uNo")._ok = closeLayer;
-      $("#uOk")._ok = async () => { const v = $("#uIn").value.trim(); store.set("srcUrl", v === DEF_SRC ? "" : v); closeLayer(); toast("正在加载新片源…"); await loadSources(true); toast(`片源：${SRC.list.length} 个`); render("settings"); };
+      $("#uOk")._ok = async () => { const v = $("#uIn").value.trim(); cfg.set("srcUrl", v === DEF_SRC ? "" : v); closeLayer(); toast("正在加载新片源…"); await loadSources(true); toast(`片源：${SRC.list.length} 个`); render("settings"); };
     };
-    $("#sReset")._ok = async () => { store.set("srcUrl", ""); await loadSources(true); toast("已恢复默认片源"); render("settings"); };
+    $("#sReset")._ok = async () => { cfg.set("srcUrl", ""); await loadSources(true); toast("已恢复默认片源"); render("settings"); };
     $("#sClear")._ok = () => { histAll().forEach(h => APP && NN.delHistory(h.key)); toast("已清除"); render("settings"); };
     F.set($("#sRefresh"));
   },
@@ -689,7 +705,12 @@ document.addEventListener("keydown", e => {
     if (inInput) document.activeElement.blur();
     const dir = { 37: "left", 38: "up", 39: "right", 40: "down" }[k];
     const before = F.cur;
-    F.move(dir);
+    F.user = true;
+    if (dir === "down" && before && before.closest("#tabs")) {  // 菜单往下：直接进片子
+      const tgt = $("#grid .card.f") || $("#page .card.f") || null;
+      if (tgt && F.visible(tgt)) { F.hold = null; F.set(tgt); } else F.move(dir);
+    } else F.move(dir);
+    F.user = false;
     // 最上面再按上：到顶部菜单
     if (dir === "up" && F.cur === before && !$("#layer").classList.contains("on") && !(before && before.closest("#tabs"))) F.set($("#tabs .tab.on") || $("#tabs .tab"));
   } else if (k === 13 || k === 23 || k === 66) {
@@ -710,12 +731,19 @@ function boot() {
   window.addEventListener("resize", fit);
   $("#tabs").innerHTML = TABS.map(t => `<div class="tab f" data-k="${t[0]}">${t[1]}</div>`).join("");
   $$("#tabs .tab").forEach(t => {
+    const open = hold => {
+      const k = t.dataset.k, name = k in CHIPS ? "cat" : k, arg = k in CHIPS ? k : null;
+      if (hold && route && route.name === name && route.arg === arg && !stack.length) return;
+      stack.length = 0;
+      F.hold = hold ? t : null;
+      route = { name, arg };
+      render(name, arg);
+    };
     t._ok = () => {
       const k = t.dataset.k;
-      stack.length = 0;
-      route = { name: k in CHIPS ? "cat" : k, arg: k in CHIPS ? k : null };
-      render(route.name, route.arg);
-    };
+      if (!route || route.name !== (k in CHIPS ? "cat" : k) || stack.length) { open(false); return; }
+      F.hold = null; const c = $("#page .f.focus") || $("#page .card.f") || $("#page .f"); if (route && route.name !== "search" && c) F.set(c); else open(false); };
+    t._onfocus = () => { if (!(F.prev && F.prev.closest("#tabs"))) return; clearTimeout(open._t); open._t = setTimeout(() => { if (F.cur === t) open(true); }, 280); };
   });
   clock(); setInterval(clock, 20000);
   loadSources();

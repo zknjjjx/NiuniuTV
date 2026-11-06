@@ -6,9 +6,9 @@ img{display:block}
 
 /* 背景：当前焦点影片的海报，模糊放大做氛围 */
 #bg{position:fixed;inset:0;left:0;top:0;right:0;bottom:0;z-index:0;overflow:hidden;background:#0b0c10}
-#bg .bgl{position:absolute;left:-10%;top:-10%;width:120%;height:120%;background-size:cover;background-position:center 25%;opacity:0;transition:opacity .9s ease;}
+#bg .bgl{position:absolute;right:0;top:0;width:64%;height:100%;background-size:cover;background-position:center 18%;background-repeat:no-repeat;opacity:0;transition:opacity .8s ease}
 #bg .bgl.on{opacity:1}
-#bg .vig{position:absolute;left:0;top:0;right:0;bottom:0;background:linear-gradient(180deg,rgba(11,12,16,.55) 0%,rgba(11,12,16,.5) 30%,rgba(11,12,16,.88) 62%,#0b0c10 100%),radial-gradient(120% 90% at 85% 10%,rgba(255,90,54,.16),transparent 55%)}
+#bg .vig{position:absolute;left:0;top:0;right:0;bottom:0;background:linear-gradient(90deg,#0b0c10 0%,#0b0c10 36%,rgba(11,12,16,.82) 46%,rgba(11,12,16,.35) 64%,rgba(11,12,16,.12) 100%),linear-gradient(180deg,rgba(11,12,16,.55) 0%,rgba(11,12,16,0) 16%,rgba(11,12,16,0) 40%,rgba(11,12,16,.85) 62%,#0b0c10 82%)}
 
 /* 顶栏 */
 #top{position:fixed;left:0;top:0;right:0;height:5rem;z-index:20;display:flex;align-items:center;padding:0 3.2rem;transition:transform .35s,opacity .35s}
@@ -28,15 +28,15 @@ img{display:block}
 .scroll{position:absolute;left:0;right:0;top:0;transition:transform .45s cubic-bezier(.2,.8,.2,1);will-change:transform}
 
 /* 首页大图区 */
-.hero{height:23rem;padding:5.6rem 3.2rem 0;position:absolute;left:0;top:0;right:0;z-index:1}
+.hero{height:20rem;padding:4.9rem 3.2rem 0;position:absolute;left:0;top:0;right:0;z-index:1}
 .scroll.home{z-index:2}
 .row{transition:opacity .35s}
 .row.past{opacity:0}
-.hero h1{font-size:2.9rem;font-weight:800;letter-spacing:.02em;text-shadow:0 .2rem 1.6rem rgba(0,0,0,.5);max-width:60rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hero h1{font-size:2.6rem;font-weight:800;letter-spacing:.02em;text-shadow:0 .2rem 1.6rem rgba(0,0,0,.5);max-width:60rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .meta{display:flex;align-items:center;flex-wrap:wrap;margin-top:1rem;font-size:1.2rem;color:rgba(255,255,255,.85)}
 .meta .rate{font-weight:800;color:#1b0d06;background:linear-gradient(90deg,var(--ac),var(--ac2));padding:.12rem .7rem;border-radius:.45rem}
 .meta .pill{padding:.12rem .7rem;border-radius:.45rem;background:rgba(255,255,255,.1);border:1px solid var(--line)}
-.hero .intro{margin-top:1rem;max-width:56rem;font-size:1.2rem;line-height:1.7;color:rgba(255,255,255,.82);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:4.1rem}
+.hero .intro{margin-top:1rem;max-width:56rem;font-size:1.2rem;line-height:1.7;color:rgba(255,255,255,.82);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:4.1rem;margin-top:.7rem}
 .hero .hint{margin-top:.6rem;font-size:1rem;color:rgba(255,255,255,.5)}
 
 /* 横排 */
@@ -150,3 +150,10 @@ img{display:block}
 .srcline .lamp{margin-right:.6rem}
 .pagehead h2{margin-right:1.4rem}
 .setrow>*+*{margin-left:1rem}
+
+.lan{position:absolute;right:3.2rem;top:6.8rem;width:19rem;padding:1.4rem;border-radius:1.2rem;background:var(--glass);border:1px solid var(--line);text-align:center}
+.lan img{width:13rem;height:13rem;margin:0 auto;border-radius:.6rem;background:#fff;padding:.5rem}
+.lan b{display:block;font-size:1.3rem;margin-bottom:.9rem}
+.lan .u{margin-top:.9rem;font-size:1.25rem;color:var(--ac2);font-weight:700;word-break:break-all}
+.lan small{display:block;margin-top:.5rem;font-size:1rem;opacity:.65;line-height:1.5}
+.setwrap .setrow{max-width:none;margin-right:25rem}

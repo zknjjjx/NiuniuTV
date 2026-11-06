@@ -8,8 +8,8 @@ android {
         applicationId 'com.niuniu.tv2'
         minSdk 21
         targetSdk 30
-        versionCode 2
-        versionName '2.0.1'
+        versionCode 3
+        versionName '2.1.0'
     }
     signingConfigs {
         niuniu {
@@ -43,4 +43,5 @@ dependencies {
     implementation "androidx.media3:media3-ui:$m3"
     implementation "androidx.media3:media3-datasource:$m3"
     implementation "androidx.annotation:annotation:1.8.2"
+    implementation "com.google.zxing:core:3.3.3"
 }

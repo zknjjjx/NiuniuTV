@@ -23,7 +23,7 @@ window.NN = {
   fetch(id, url, h, t) { window.pyFetch(url, h ? JSON.parse(h) : {}, t || 10000).then(r => window.__nnCb(id, r.code, r.body, r.ms)); },
   probe(id, url) { window.pyFetch(url, {}, 6000).then(r => window.__nnCb(id, 200, JSON.stringify({bps: r.code === 200 ? 1500000 + Math.random() * 3e6 : -1}), 0)); },
   play(j) { window.__played = JSON.parse(j); },
-  history() { return JSON.stringify([]); }, delHistory() {}, version() { return "ci"; }, toast() {}, exit() {},
+  history() { return JSON.stringify([]); }, lan() { return JSON.stringify({url: "http://192.168.2.50:9978", qr: "logo.png"}); }, delHistory() {}, version() { return "ci"; }, toast() {}, exit() {},
 };
 """
 
@@ -63,10 +63,21 @@ async def main():
         played = await pg.evaluate("window.__played ? {title: __played.title, n: __played.sources.length, first: __played.sources.slice(0,3).map(s => s.site + ' ' + s.bps)} : null")
         logs.append("PLAYED: " + json.dumps(played, ensure_ascii=False))
         await pg.evaluate("nnBack()"); await pg.wait_for_timeout(800)
-        for k in ["ArrowUp", "ArrowUp", "ArrowUp", "ArrowUp", "ArrowUp", "ArrowRight", "Enter"]:
+        for k in ["ArrowUp", "ArrowUp", "ArrowUp", "ArrowUp", "ArrowUp", "ArrowRight"]:
             await pg.keyboard.press(k); await pg.wait_for_timeout(400)
         await pg.wait_for_timeout(5000)
         await pg.screenshot(path=OUT / "6-movie.png")
+        logs.append("TABFOCUS: " + await pg.evaluate("F.cur && F.cur.textContent + ' route=' + route.name + '/' + route.arg"))
+        await pg.keyboard.press("ArrowDown"); await pg.wait_for_timeout(800)
+        await pg.screenshot(path=OUT / "7-movie-down.png")
+        logs.append("DOWN: " + await pg.evaluate("F.cur && F.cur.className + ' ' + (F.cur.dataset.title||'')"))
+        await pg.keyboard.press("ArrowUp"); await pg.wait_for_timeout(300)
+        await pg.keyboard.press("ArrowUp"); await pg.wait_for_timeout(300)
+        for i in range(6):
+            await pg.keyboard.press("ArrowRight"); await pg.wait_for_timeout(150)
+        await pg.wait_for_timeout(3000)
+        await pg.screenshot(path=OUT / "8-settings.png")
+        logs.append("SET: " + await pg.evaluate("F.cur && F.cur.textContent + ' route=' + route.name"))
         await pg.evaluate("nnBack()"); await pg.wait_for_timeout(500)
         src = await pg.evaluate("JSON.stringify({n: SRC.list.length, from: SRC.from})")
         logs.append("SRC: " + src)

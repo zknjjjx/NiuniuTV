@@ -30,6 +30,7 @@ public class MainActivity extends Activity {
     private final ExecutorService probes = Executors.newFixedThreadPool(3);
     private final ExecutorService dbPool = Executors.newFixedThreadPool(6);  // 豆瓣单独排队，不被片源搜索堵住
     private long lastBack = 0;
+    private Lan lan;
 
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
     @Override
@@ -75,6 +76,8 @@ public class MainActivity extends Activity {
                 return null;
             }
         });
+        lan = new Lan(this, new Lan.Js() { public void run(String code) { js(code); } });
+        lan.start();
         setContentView(web);
         web.requestFocus();
         web.loadUrl("file:///android_asset/web/index.html");
@@ -137,6 +140,15 @@ public class MainActivity extends Activity {
         public void delHistory(String key) { Hist.remove(MainActivity.this, key); }
 
         @JavascriptInterface
+        public String cfg(String k) { return Lan.cfg(MainActivity.this).getString(k, ""); }
+
+        @JavascriptInterface
+        public void setCfg(String k, String v) { Lan.cfg(MainActivity.this).edit().putString(k, v == null ? "" : v).apply(); }
+
+        @JavascriptInterface
+        public String lan() { return lan == null ? "{}" : lan.info(); }
+
+        @JavascriptInterface
         public String version() { return BuildConfigVersion.NAME; }
 
         @JavascriptInterface
@@ -190,6 +202,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         pool.shutdownNow();
+        if (lan != null) lan.stop();
         probes.shutdownNow();
         dbPool.shutdownNow();
         if (web != null) { web.destroy(); web = null; }

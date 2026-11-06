@@ -82,6 +82,19 @@ const store = {
     }
   }
 };
+const cfg = {
+  get(k, d) {
+    if (APP && NN.cfg) {
+      const v = NN.cfg(k);
+      return v === "" || v == null ? d : v;
+    }
+    return store.get(k, d);
+  },
+  set(k, v) {
+    if (APP && NN.setCfg) NN.setCfg(k, v || "");
+    else store.set(k, v);
+  }
+};
 function toast(msg) {
   const t = $("#toast");
   t.textContent = msg;
@@ -199,7 +212,7 @@ function parseSites(d) {
 const SRC = { list: [], from: "", t: 0 };
 function loadSources(force) {
   return __async(this, null, function* () {
-    const custom = store.get("srcUrl", "") || DEF_SRC;
+    const custom = cfg.get("srcUrl", "") || DEF_SRC;
     const cache = store.get("src", null);
     if (!force && cache && cache.url === custom && cache.list.length && Date.now() - cache.t < 12 * 36e5) {
       Object.assign(SRC, cache);
@@ -229,6 +242,10 @@ function loadSources(force) {
         } catch (e2) {
         }
       }
+    }
+    try {
+      if (APP && NN.setCfg) NN.setCfg("srcState", JSON.stringify({ n: SRC.list.length, from: SRC.from }));
+    } catch (e) {
     }
     return SRC;
   });
@@ -305,9 +322,14 @@ const F = {
   scope() {
     return $("#layer").classList.contains("on") ? $("#layer") : document;
   },
+  hold: null,
+  // 菜单预览中：页面加载时不抢焦点
   set(el, quiet) {
     if (!el) return;
+    if (F.hold && !F.user && !el.closest("#top") && !el.closest("#layer")) return;
+    if (F.hold && !el.closest("#top")) F.hold = null;
     if (F.cur) F.cur.classList.remove("focus");
+    F.prev = F.cur;
     F.cur = el;
     el.classList.add("focus");
     const g = el.closest("[data-g]");
@@ -420,7 +442,7 @@ const F = {
 let remPx = 20;
 const rem = () => remPx;
 function fit() {
-  remPx = window.innerWidth / 84;
+  remPx = window.innerWidth / 74;
   document.documentElement.style.fontSize = remPx + "px";
 }
 let bgI = 0, bgUrl = "";
@@ -435,7 +457,7 @@ function setBg(url) {
     ls[bgI].classList.add("on");
     ls[bgI ^ 1].classList.remove("on");
   };
-  img.src = url.replace(/\/[a-z]_ratio_poster\//, "/s_ratio_poster/");
+  img.src = url.replace(/\/[a-z]_ratio_poster\//, "/l_ratio_poster/");
 }
 const TABS = [["home", "\u9996\u9875"], ["movie", "\u7535\u5F71"], ["tv", "\u5267\u96C6"], ["anime", "\u52A8\u6F2B"], ["show", "\u7EFC\u827A"], ["search", "\u641C\u7D22"], ["history", "\u89C2\u770B\u8BB0\u5F55"], ["settings", "\u8BBE\u7F6E"]];
 const stack = [];
@@ -455,8 +477,10 @@ function render(name, arg, restore) {
   $$("#tabs .tab").forEach((t) => t.classList.toggle("on", t.dataset.k === tk));
   $("#top").classList.remove("hide");
   const fn = PAGES[name];
-  if (F.cur) F.cur.classList.remove("focus");
-  F.cur = null;
+  if (!F.hold) {
+    if (F.cur) F.cur.classList.remove("focus");
+    F.cur = null;
+  }
   fn(routeTok, arg, restore);
 }
 window.nnBack = function() {
@@ -487,6 +511,26 @@ window.nnBack = function() {
   }
   return false;
 };
+window.nnRemote = function(act, v) {
+  return __async(this, null, function* () {
+    if (act === "src") {
+      toast("\u624B\u673A\u5DF2\u4FEE\u6539\u7247\u6E90\uFF0C\u6B63\u5728\u52A0\u8F7D\u2026");
+      yield loadSources(true);
+      toast(`\u7247\u6E90\uFF1A${SRC.list.length} \u4E2A`);
+      if (route && route.name === "settings") render("settings");
+    } else if (act === "search") {
+      F.hold = null;
+      stack.length = 0;
+      route = { name: "search", arg: v };
+      render("search", v);
+      toast("\u6536\u5230\u641C\u7D22\uFF1A" + v);
+    } else if (act === "hist") {
+      toast("\u89C2\u770B\u8BB0\u5F55\u5DF2\u6E05\u9664");
+      if (route && (route.name === "settings" || route.name === "history" || route.name === "home")) render(route.name);
+    }
+  });
+};
+window.nnState = () => JSON.stringify({ n: SRC.list.length, from: SRC.from });
 window.nnResume = function() {
   if (!route) return;
   if (route.name === "home") refreshHistory();
@@ -614,7 +658,7 @@ function heroFocus(c) {
 const PAGES = {
   home(tok, _, restore) {
     $("#page").innerHTML = `<section class="hero"><h1>\u599E\u599E\u5F71\u89C6</h1><div class="meta"></div><div class="intro">\u6B63\u5728\u52A0\u8F7D\u4ECA\u65E5\u70ED\u95E8\u2026</div><div class="hint">\u2191 \u9876\u90E8\u83DC\u5355\u3000\xB7\u3000OK \u67E5\u770B\u8BE6\u60C5\u3000\xB7\u3000\u8FD4\u56DE\u952E\u9000\u51FA</div></section>
-      <div class="scroll home" data-lock="row" data-pad="24"><div style="height:24rem"></div>
+      <div class="scroll home" data-lock="row" data-pad="20.5"><div style="height:20.5rem"></div>
       ${HOME_ROWS.map((r, i) => rowHTML("row" + i, r[0], skel(8))).join("")}</div>`;
     bindCards($("#page"), heroFocus);
     let focused = false;
@@ -631,7 +675,11 @@ const PAGES = {
         const t = $(`#row${i} .track`);
         t.innerHTML = d.items.length ? d.items.map((it) => card(Object.assign(it, { type: r[1] === "tv" ? "tv" : it.type }), { sub: short(it.sub).split(" \xB7 ")[0] || it.ep })).join("") : `<div class="empty">\u6682\u65F6\u62FF\u4E0D\u5230\u8C46\u74E3\u6570\u636E</div>`;
         bindCards(t, heroFocus);
-        if (i === 0) focusFirst();
+        if (i === 0) {
+          const fc = $("#page .card.f");
+          if (fc) heroFocus(fc);
+          focusFirst();
+        }
       }).catch(() => {
         const t = $(`#row${i} .track`);
         if (t) t.innerHTML = `<div class="empty">\u8C46\u74E3\u6570\u636E\u52A0\u8F7D\u5931\u8D25\uFF0C\u7A0D\u540E\u518D\u8BD5</div>`;
@@ -955,8 +1003,14 @@ const PAGES = {
     return __async(this, null, function* () {
       yield loadSources();
       if (tok !== routeTok) return;
-      const custom = store.get("srcUrl", "");
-      $("#page").innerHTML = `<div class="scroll" data-pad="6"><div class="pagehead sec"><h2>\u8BBE\u7F6E</h2><span>\u7248\u672C ${APP ? esc(NN.version()) : "dev"}</span></div>
+      const custom = cfg.get("srcUrl", "");
+      let lan = null;
+      try {
+        lan = APP && NN.lan ? JSON.parse(NN.lan()) : null;
+      } catch (e) {
+      }
+      $("#page").innerHTML = `${lan && lan.url ? `<div class="lan"><b>\u624B\u673A / \u7535\u8111\u626B\u7801\u8BBE\u7F6E</b><img src="${lan.qr}"><div class="u">${esc(lan.url)}</div><small>\u540C\u4E00\u5C40\u57DF\u7F51\u5185\u7528\u6D4F\u89C8\u5668\u6253\u5F00<br>\u53EF\u6539\u7247\u6E90\u3001\u63A8\u9001\u641C\u7D22\u3001\u6E05\u8BB0\u5F55</small></div>` : `<div class="lan"><b>\u5C40\u57DF\u7F51\u8BBE\u7F6E</b><small>\u6CA1\u8FDE\u4E0A\u5C40\u57DF\u7F51\uFF0C\u6682\u4E0D\u53EF\u7528</small></div>`}
+      <div class="scroll setwrap" data-pad="6"><div class="pagehead sec"><h2>\u8BBE\u7F6E</h2><span>\u7248\u672C ${APP ? esc(NN.version()) : "dev"}</span></div>
       <div class="setrow f" id="sRefresh"><span>\u5237\u65B0\u7247\u6E90</span><small>${SRC.list.length} \u4E2A\u91C7\u96C6\u7AD9 \xB7 ${esc(SRC.from.replace(/^https?:\/\//, "").slice(0, 60))}</small></div>
       <div class="setrow f" id="sUrl"><span>\u7247\u6E90\u5730\u5740</span><small>${esc(custom || "\u9ED8\u8BA4\uFF1Azknjjjx/tvbox \u7684 cmstv.json\uFF08\u81EA\u52A8\u52A0\u901F\uFF09")}</small></div>
       <div class="setrow f" id="sReset"><span>\u6062\u590D\u9ED8\u8BA4\u7247\u6E90</span><small>\u6E05\u6389\u81EA\u5B9A\u4E49\u5730\u5740</small></div>
@@ -976,7 +1030,7 @@ const PAGES = {
         $("#uNo")._ok = closeLayer;
         $("#uOk")._ok = () => __async(this, null, function* () {
           const v = $("#uIn").value.trim();
-          store.set("srcUrl", v === DEF_SRC ? "" : v);
+          cfg.set("srcUrl", v === DEF_SRC ? "" : v);
           closeLayer();
           toast("\u6B63\u5728\u52A0\u8F7D\u65B0\u7247\u6E90\u2026");
           yield loadSources(true);
@@ -985,7 +1039,7 @@ const PAGES = {
         });
       };
       $("#sReset")._ok = () => __async(this, null, function* () {
-        store.set("srcUrl", "");
+        cfg.set("srcUrl", "");
         yield loadSources(true);
         toast("\u5DF2\u6062\u590D\u9ED8\u8BA4\u7247\u6E90");
         render("settings");
@@ -1009,7 +1063,15 @@ document.addEventListener("keydown", (e) => {
     if (inInput) document.activeElement.blur();
     const dir = { 37: "left", 38: "up", 39: "right", 40: "down" }[k];
     const before = F.cur;
-    F.move(dir);
+    F.user = true;
+    if (dir === "down" && before && before.closest("#tabs")) {
+      const tgt = $("#grid .card.f") || $("#page .card.f") || null;
+      if (tgt && F.visible(tgt)) {
+        F.hold = null;
+        F.set(tgt);
+      } else F.move(dir);
+    } else F.move(dir);
+    F.user = false;
     if (dir === "up" && F.cur === before && !$("#layer").classList.contains("on") && !(before && before.closest("#tabs"))) F.set($("#tabs .tab.on") || $("#tabs .tab"));
   } else if (k === 13 || k === 23 || k === 66) {
     if (inInput) return;
@@ -1032,11 +1094,31 @@ function boot() {
   window.addEventListener("resize", fit);
   $("#tabs").innerHTML = TABS.map((t) => `<div class="tab f" data-k="${t[0]}">${t[1]}</div>`).join("");
   $$("#tabs .tab").forEach((t) => {
+    const open = (hold) => {
+      const k = t.dataset.k, name = k in CHIPS ? "cat" : k, arg = k in CHIPS ? k : null;
+      if (hold && route && route.name === name && route.arg === arg && !stack.length) return;
+      stack.length = 0;
+      F.hold = hold ? t : null;
+      route = { name, arg };
+      render(name, arg);
+    };
     t._ok = () => {
       const k = t.dataset.k;
-      stack.length = 0;
-      route = { name: k in CHIPS ? "cat" : k, arg: k in CHIPS ? k : null };
-      render(route.name, route.arg);
+      if (!route || route.name !== (k in CHIPS ? "cat" : k) || stack.length) {
+        open(false);
+        return;
+      }
+      F.hold = null;
+      const c = $("#page .f.focus") || $("#page .card.f") || $("#page .f");
+      if (route && route.name !== "search" && c) F.set(c);
+      else open(false);
+    };
+    t._onfocus = () => {
+      if (!(F.prev && F.prev.closest("#tabs"))) return;
+      clearTimeout(open._t);
+      open._t = setTimeout(() => {
+        if (F.cur === t) open(true);
+      }, 280);
     };
   });
   clock();

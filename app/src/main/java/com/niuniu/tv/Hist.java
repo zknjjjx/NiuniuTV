@@ -36,6 +36,8 @@ public class Hist {
         return null;
     }
 
+    public static synchronized void clear(Context c) { sp(c).edit().putString("list", "[]").apply(); }
+
     public static synchronized void remove(Context c, String key) {
         JSONArray old = all(c), out = new JSONArray();
         for (int i = 0; i < old.length(); i++) {
