@@ -130,6 +130,20 @@ public class PlayerActivity extends Activity {
                 .setMediaSourceFactory(new DefaultMediaSourceFactory(new AdFilter.Factory(http)))
                 .setLoadControl(lc).build();
         view.setPlayer(player);
+        // m3u8/ts 多数不标帧率：按实际渲染的帧时间戳估算，再对齐屏幕刷新率
+        player.setVideoFrameMetadataListener(new androidx.media3.exoplayer.video.VideoFrameMetadataListener() {
+            @Override
+            public void onVideoFrameAboutToBeRendered(long pt, long rel, @NonNull Format f, android.media.MediaFormat mf) {
+                if (fDone) return;
+                if (fLast >= 0) { long d = pt - fLast; if (d > 5000 && d < 100000) { fSum += d; fCnt++; } }
+                fLast = pt;
+                if (fCnt >= 48) {
+                    fDone = true;
+                    final float fps = 1e6f * fCnt / fSum;
+                    h.post(new Runnable() { public void run() { estFps = snap(fps); matchRefresh(estFps, 0, 0); updateInfo(); } });
+                }
+            }
+        });
         player.addAnalyticsListener(new AnalyticsListener() {
             @Override
             public void onVideoDecoderInitialized(@NonNull EventTime t, @NonNull String name, long a, long b) {
@@ -195,7 +209,7 @@ public class PlayerActivity extends Activity {
     }
 
     private void load(long pos) {
-        dropped = 0;
+        dropped = 0; estFps = 0; vFmt = ""; fLast = -1; fSum = 0; fCnt = 0; fDone = false;
         JSONArray a = eps(si);
         if (a == null || a.length() == 0) { switchSource("没有剧集"); return; }
         if (ei >= a.length()) ei = a.length() - 1;
@@ -238,12 +252,24 @@ public class PlayerActivity extends Activity {
         } catch (Throwable ignored) {}
     }
     private String refresh = "";
+    private float estFps = 0;
+    private volatile long fLast = -1, fSum = 0;
+    private volatile int fCnt = 0;
+    private volatile boolean fDone = false;
+    static float snap(float f) {
+        float[] std = {23.976f, 24f, 25f, 29.97f, 30f, 50f, 59.94f, 60f};
+        float b = f, bd = 9;
+        for (float s : std) if (Math.abs(s - f) < bd) { bd = Math.abs(s - f); b = s; }
+        return bd < 0.6f ? b : f;
+    }
 
     private String decInfo() {
         if (decName.isEmpty()) return "";
         String n = decName.toLowerCase(java.util.Locale.US);
         boolean sw = n.startsWith("omx.google.") || n.startsWith("c2.android.") || n.contains("ffmpeg");
-        return (sw ? "软解" : "硬解") + "  " + vFmt + (refresh.isEmpty() ? "" : "  屏幕 " + refresh) + (dropped > 0 ? "  掉帧 " + dropped : "");
+        if (refresh.isEmpty() && Build.VERSION.SDK_INT >= 23) refresh = Math.round(getWindowManager().getDefaultDisplay().getMode().getRefreshRate()) + "Hz";
+        String fps = vFmt.contains("fps") || estFps <= 0 ? "" : String.format(java.util.Locale.US, " %.3gfps", estFps);
+        return (sw ? "软解" : "硬解") + "  " + vFmt + fps + "  屏幕 " + refresh + "  掉帧 " + dropped;
     }
 
     private void updateInfo() {
