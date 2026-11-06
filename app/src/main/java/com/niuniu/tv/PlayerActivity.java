@@ -30,6 +30,11 @@ import androidx.media3.exoplayer.DefaultLoadControl;
 import androidx.media3.exoplayer.DefaultRenderersFactory;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
+import androidx.media3.exoplayer.analytics.AnalyticsListener;
+import androidx.media3.exoplayer.DecoderReuseEvaluation;
+import androidx.media3.common.Format;
+import android.os.Build;
+import android.view.Display;
 import androidx.media3.ui.AspectRatioFrameLayout;
 import androidx.media3.ui.PlayerView;
 
@@ -125,6 +130,20 @@ public class PlayerActivity extends Activity {
                 .setMediaSourceFactory(new DefaultMediaSourceFactory(http))
                 .setLoadControl(lc).build();
         view.setPlayer(player);
+        player.addAnalyticsListener(new AnalyticsListener() {
+            @Override
+            public void onVideoDecoderInitialized(@NonNull EventTime t, @NonNull String name, long a, long b) {
+                decName = name; updateInfo();
+            }
+            @Override
+            public void onVideoInputFormatChanged(@NonNull EventTime t, @NonNull Format f, DecoderReuseEvaluation e) {
+                vFmt = f.width + "x" + f.height + (f.frameRate > 0 ? String.format(java.util.Locale.US, " %.3gfps", f.frameRate) : "");
+                if (f.frameRate > 0) matchRefresh(f.frameRate, f.width, f.height);
+                updateInfo();
+            }
+            @Override
+            public void onDroppedVideoFrames(@NonNull EventTime t, int n, long ms) { dropped += n; updateInfo(); }
+        });
         player.addListener(new Player.Listener() {
             @Override
             public void onPlaybackStateChanged(int st) {
@@ -176,6 +195,7 @@ public class PlayerActivity extends Activity {
     }
 
     private void load(long pos) {
+        dropped = 0;
         JSONArray a = eps(si);
         if (a == null || a.length() == 0) { switchSource("没有剧集"); return; }
         if (ei >= a.length()) ei = a.length() - 1;
@@ -191,13 +211,48 @@ public class PlayerActivity extends Activity {
         updateInfo();
     }
 
+    private String decName = "", vFmt = "";
+    private int dropped = 0;
+
+    /** 让电视刷新率跟片源帧率对齐（25fps→50Hz、24→24/48Hz），消除 25 帧片在 60Hz 上的抖动 */
+    private void matchRefresh(float fps, int vw, int vh) {
+        if (Build.VERSION.SDK_INT < 23) return;
+        try {
+            Display d = getWindowManager().getDefaultDisplay();
+            Display.Mode cur = d.getMode();
+            Display.Mode best = null;
+            float bestScore = 1e9f;
+            for (Display.Mode m : d.getSupportedModes()) {
+                if (m.getPhysicalWidth() != cur.getPhysicalWidth() || m.getPhysicalHeight() != cur.getPhysicalHeight()) continue;
+                float r = m.getRefreshRate(), k = r / fps, frac = Math.abs(k - Math.round(k));
+                if (Math.round(k) < 1 || frac > 0.012f) continue;
+                float score = Math.abs(r - cur.getRefreshRate());
+                if (score < bestScore) { bestScore = score; best = m; }
+            }
+            if (best != null && best.getModeId() != cur.getModeId()) {
+                WindowManager.LayoutParams lp = getWindow().getAttributes();
+                lp.preferredDisplayModeId = best.getModeId();
+                getWindow().setAttributes(lp);
+                refresh = Math.round(best.getRefreshRate()) + "Hz";
+            } else refresh = Math.round(cur.getRefreshRate()) + "Hz";
+        } catch (Throwable ignored) {}
+    }
+    private String refresh = "";
+
+    private String decInfo() {
+        if (decName.isEmpty()) return "";
+        String n = decName.toLowerCase(java.util.Locale.US);
+        boolean sw = n.startsWith("omx.google.") || n.startsWith("c2.android.") || n.contains("ffmpeg");
+        return (sw ? "软解" : "硬解") + "  " + vFmt + (refresh.isEmpty() ? "" : "  屏幕 " + refresh) + (dropped > 0 ? "  掉帧 " + dropped : "");
+    }
+
     private void updateInfo() {
         String t = data.optString("title");
         String ep = epName();
         int total = eps(si).length();
         JSONObject s = sources.optJSONObject(si);
         String src = s == null ? "" : s.optString("site");
-        info.setText(t + (total > 1 ? "  ·  " + ep : "") + "\n片源：" + src + "（" + (si + 1) + "/" + sources.length() + "）   ▲ 选集换源");
+        info.setText(t + (total > 1 ? "  ·  " + ep : "") + "\n片源：" + src + "（" + (si + 1) + "/" + sources.length() + "）   ▲ 选集换源" + (decInfo().isEmpty() ? "" : "\n" + decInfo()));
     }
 
     private void showStatus(String msg, long ms) {

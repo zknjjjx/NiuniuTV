@@ -163,8 +163,16 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    protected void onPause() {
+        super.onPause();
+        // 播放时让界面完全停下（动画、定时器），把性能全留给视频
+        if (web != null) { web.onPause(); web.pauseTimers(); }
+    }
+
+    @Override
     protected void onResume() {
         super.onResume();
+        if (web != null) { web.onResume(); web.resumeTimers(); }
         if (web != null) web.evaluateJavascript("window.nnResume&&nnResume()", null);
         hideBars();
     }
