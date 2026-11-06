@@ -1,0 +1,44 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'com.niuniu.tv'
+    compileSdk 34
+    defaultConfig {
+        applicationId 'com.niuniu.tv2'
+        minSdk 21
+        targetSdk 30
+        versionCode 1
+        versionName '2.0.0'
+    }
+    signingConfigs {
+        niuniu {
+            storeFile rootProject.file('keystore/niuniu.p12')
+            storeType 'pkcs12'
+            storePassword System.getenv('NN_KEY_PASS') ?: 'niuniutv'
+            keyAlias 'niuniu'
+            keyPassword System.getenv('NN_KEY_PASS') ?: 'niuniutv'
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.niuniu
+        }
+        debug { signingConfig signingConfigs.niuniu }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    applicationVariants.all { v ->
+        v.outputs.all { outputFileName = "NiuniuTV-${v.versionName}.apk" }
+    }
+}
+
+dependencies {
+    def m3 = '1.4.1'
+    implementation "androidx.media3:media3-exoplayer:$m3"
+    implementation "androidx.media3:media3-exoplayer-hls:$m3"
+    implementation "androidx.media3:media3-ui:$m3"
+    implementation "androidx.media3:media3-datasource:$m3"
+}

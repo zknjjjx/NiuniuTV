@@ -1,0 +1,9 @@
+<resources>
+    <style name="Nn" parent="android:Theme.Material.NoActionBar.Fullscreen">
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:colorAccent">@color/ac</item>
+        <item name="android:windowContentOverlay">@null</item>
+    </style>
+    <color name="bg">#FF0B0C10</color>
+    <color name="ac">#FFFF5A36</color>
+</resources>
