@@ -455,6 +455,7 @@ function render(name, arg, restore) {
   $$("#tabs .tab").forEach((t) => t.classList.toggle("on", t.dataset.k === tk));
   $("#top").classList.remove("hide");
   const fn = PAGES[name];
+  if (F.cur) F.cur.classList.remove("focus");
   F.cur = null;
   fn(routeTok, arg, restore);
 }
@@ -603,7 +604,7 @@ const PAGES = {
   home(tok, _, restore) {
     const hist = histAll().slice(0, 16);
     $("#page").innerHTML = `<section class="hero"><h1>\u599E\u599E\u5F71\u89C6</h1><div class="meta"></div><div class="intro">\u6B63\u5728\u52A0\u8F7D\u4ECA\u65E5\u70ED\u95E8\u2026</div><div class="hint">\u2191 \u9876\u90E8\u83DC\u5355\u3000\xB7\u3000OK \u67E5\u770B\u8BE6\u60C5\u3000\xB7\u3000\u8FD4\u56DE\u952E\u9000\u51FA</div></section>
-      <div class="scroll home" data-lock="row" data-pad="33"><div style="height:33rem"></div>
+      <div class="scroll home" data-lock="row" data-pad="29.5"><div style="height:29.5rem"></div>
       ${rowHTML("rowHist", "\u7EE7\u7EED\u89C2\u770B", hist.map(histCard).join(""))}
       ${HOME_ROWS.map((r, i) => rowHTML("row" + i, r[0], skel(8))).join("")}</div>`;
     if (!hist.length) $("#rowHist").style.display = "none";

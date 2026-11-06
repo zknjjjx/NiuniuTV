@@ -303,6 +303,7 @@ function render(name, arg, restore) {
   $$("#tabs .tab").forEach(t => t.classList.toggle("on", t.dataset.k === tk));
   $("#top").classList.remove("hide");
   const fn = PAGES[name];
+  if (F.cur) F.cur.classList.remove("focus");
   F.cur = null;
   fn(routeTok, arg, restore);
 }
@@ -414,7 +415,7 @@ const PAGES = {
   home(tok, _, restore) {
     const hist = histAll().slice(0, 16);
     $("#page").innerHTML = `<section class="hero"><h1>妞妞影视</h1><div class="meta"></div><div class="intro">正在加载今日热门…</div><div class="hint">↑ 顶部菜单　·　OK 查看详情　·　返回键退出</div></section>
-      <div class="scroll home" data-lock="row" data-pad="33"><div style="height:33rem"></div>
+      <div class="scroll home" data-lock="row" data-pad="29.5"><div style="height:29.5rem"></div>
       ${rowHTML("rowHist", "继续观看", hist.map(histCard).join(""))}
       ${HOME_ROWS.map((r, i) => rowHTML("row" + i, r[0], skel(8))).join("")}</div>`;
     if (!hist.length) $("#rowHist").style.display = "none";

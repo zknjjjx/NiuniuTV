@@ -1,5 +1,5 @@
 """CI 里用桌面 Chromium 模拟电视（1920x1080），假装原生层 NN，截几张界面图检查。"""
-import asyncio, json, time, urllib.request, ssl, os, pathlib
+import concurrent.futures, asyncio, json, time, urllib.request, ssl, os, pathlib
 from playwright.async_api import async_playwright
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent / "app/src/main/assets/web"
@@ -28,6 +28,7 @@ window.NN = {
 """
 
 async def main():
+    asyncio.get_event_loop().set_default_executor(concurrent.futures.ThreadPoolExecutor(40))
     async with async_playwright() as p:
         b = await p.chromium.launch()
         pg = await b.new_page(viewport={"width": 1920, "height": 1080})

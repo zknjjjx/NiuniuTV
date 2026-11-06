@@ -28,7 +28,7 @@ img{display:block}
 .scroll{position:absolute;left:0;right:0;top:0;transition:transform .45s cubic-bezier(.2,.8,.2,1);will-change:transform}
 
 /* 首页大图区 */
-.hero{height:31rem;padding:7.5rem 3.2rem 0;position:absolute;left:0;top:0;right:0;z-index:1}
+.hero{height:28rem;padding:6.6rem 3.2rem 0;position:absolute;left:0;top:0;right:0;z-index:1}
 .scroll.home{z-index:2}
 .row{transition:opacity .35s}
 .row.past{opacity:0}
@@ -37,13 +37,13 @@ img{display:block}
 .meta .rate{font-weight:800;color:#1b0d06;background:linear-gradient(90deg,var(--ac),var(--ac2));padding:.12rem .7rem;border-radius:.45rem}
 .meta .pill{padding:.12rem .7rem;border-radius:.45rem;background:rgba(255,255,255,.1);border:1px solid var(--line)}
 .hero .intro{margin-top:1.2rem;max-width:52rem;font-size:1.08rem;line-height:1.75;color:rgba(255,255,255,.78);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;min-height:5.6rem}
-.hero .hint{margin-top:1.2rem;font-size:.95rem;color:rgba(255,255,255,.5)}
+.hero .hint{margin-top:.8rem;font-size:.95rem;color:rgba(255,255,255,.5)}
 
 /* 横排 */
 .row{padding:0 0 1.6rem}
 .row h3{font-size:1.35rem;font-weight:700;padding:0 3.2rem .9rem;display:flex;align-items:center}
 .row h3:before{content:"";width:.3rem;height:1.2rem;border-radius:.2rem;background:linear-gradient(180deg,var(--ac),var(--ac2))}
-.row h3 small{font-size:.9rem;font-weight:400;opacity:.5}
+.row h3 small{margin-left:.8rem;font-size:.9rem;font-weight:400;opacity:.5}
 .vp{overflow:visible;padding:0 3.2rem}
 .track{display:flex;transition:transform .4s cubic-bezier(.2,.8,.2,1);will-change:transform}
 

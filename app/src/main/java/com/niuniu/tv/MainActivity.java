@@ -28,6 +28,7 @@ public class MainActivity extends Activity {
     private WebView web;
     private final ExecutorService pool = Executors.newFixedThreadPool(16);
     private final ExecutorService probes = Executors.newFixedThreadPool(3);
+    private final ExecutorService dbPool = Executors.newFixedThreadPool(6);  // 豆瓣单独排队，不被片源搜索堵住
     private long lastBack = 0;
 
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
@@ -88,7 +89,7 @@ public class MainActivity extends Activity {
     public class Bridge {
         @JavascriptInterface
         public void fetch(final String id, final String url, final String headers, final int timeout) {
-            pool.execute(new Runnable() {
+            (url.contains("douban.com") ? dbPool : pool).execute(new Runnable() {
                 public void run() {
                     int code = 0;
                     String body = "";
@@ -190,6 +191,7 @@ public class MainActivity extends Activity {
     protected void onDestroy() {
         pool.shutdownNow();
         probes.shutdownNow();
+        dbPool.shutdownNow();
         if (web != null) { web.destroy(); web = null; }
         super.onDestroy();
     }
