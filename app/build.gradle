@@ -4,7 +4,7 @@ android {
     compileSdkVersion 33
 
     defaultConfig {
-        applicationId 'com.github.tvbox.osc.jun'
+        applicationId 'com.niuniu.tv'
         targetSdkVersion 28
         versionCode 1
         versionName '1.0.0'
@@ -96,12 +96,26 @@ android {
         }
     }
 
+    signingConfigs {
+        niuniu {
+            storeFile rootProject.file('keystore/niuniu.p12')
+            storeType 'pkcs12'
+            storePassword 'niuniutv'   // 个人侧载用的公开口令
+            keyAlias 'niuniu'
+            keyPassword 'niuniutv'
+            v1SigningEnabled true
+            v2SigningEnabled true
+        }
+    }
+
     buildTypes {
         debug {
             minifyEnabled false
+            signingConfig signingConfigs.niuniu
         }
         release {
             minifyEnabled true
+            signingConfig signingConfigs.niuniu
         }
     }
 
@@ -116,7 +130,7 @@ android {
         variant.outputs.configureEach { output ->
             def flavorNames = variant.productFlavors.collect { it.name }.join('-')
             // 构建自定义文件名
-            def fileName = "TVBox_${variant.buildType.name}-${flavorNames}.apk"
+            def fileName = "Niuniu-${flavorNames}.apk"
             outputFileName = fileName
         }
     }
