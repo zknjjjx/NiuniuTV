@@ -34,7 +34,9 @@ async def main():
         logs = []
         pg.on("console", lambda m: logs.append(m.type + ": " + m.text))
         pg.on("pageerror", lambda e: logs.append("PAGEERROR: " + str(e)))
-        await pg.expose_function("pyFetch", lambda url, h, t: asyncio.get_event_loop().run_in_executor(None, http, url, h, t))
+        async def pyFetch(url, h, t):
+            return await asyncio.get_event_loop().run_in_executor(None, http, url, h, t)
+        await pg.expose_function("pyFetch", pyFetch)
         async def img(route):
             r = await asyncio.get_event_loop().run_in_executor(None, lambda: urllib.request.urlopen(urllib.request.Request(route.request.url, headers={"Referer": "https://movie.douban.com/", "User-Agent": UA}), timeout=15, context=ctx).read())
             await route.fulfill(body=r, content_type="image/jpeg")
