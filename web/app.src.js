@@ -275,7 +275,7 @@ const F = {
 };
 let remPx = 20;
 const rem = () => remPx;
-function fit() { remPx = window.innerWidth / 96; document.documentElement.style.fontSize = remPx + "px"; }
+function fit() { remPx = window.innerWidth / 84; document.documentElement.style.fontSize = remPx + "px"; }
 
 /* 背景氛围图 */
 let bgI = 0, bgUrl = "";
@@ -283,8 +283,8 @@ function setBg(url) {
   if (!url || url === bgUrl) return;
   bgUrl = url;
   const ls = $$("#bg .bgl"), img = new Image();
-  img.onload = () => { if (bgUrl !== url) return; bgI ^= 1; ls[bgI].style.backgroundImage = `url("${url}")`; ls[bgI].classList.add("on"); ls[bgI ^ 1].classList.remove("on"); };
-  img.src = url;
+  img.onload = () => { if (bgUrl !== url) return; bgI ^= 1; ls[bgI].style.backgroundImage = `url("${img.src}")`; ls[bgI].classList.add("on"); ls[bgI ^ 1].classList.remove("on"); };
+  img.src = url.replace(/\/[a-z]_ratio_poster\//, "/s_ratio_poster/");
 }
 
 /* ---------------- 路由 ---------------- */
@@ -316,6 +316,13 @@ window.nnBack = function () {
     return true;
   }
   if (route && route.name !== "home") { go("home", null, true); return true; }
+  const homeTab = $('#tabs .tab[data-k="home"]');
+  if (F.cur !== homeTab) {  // 首页：先回到顶部，再按一次才提示退出
+    const sc = $(".scroll");
+    if (sc) { sc._y = 0; sc.style.transform = "translateY(0)"; $$(".row", sc).forEach(r => r.classList.remove("past")); }
+    F.set(homeTab, true);
+    return true;
+  }
   return false;
 };
 window.nnResume = function () {
@@ -396,7 +403,7 @@ function heroFocus(c) {
   if (!hero) return;
   clearTimeout(heroTimer);
   heroTimer = setTimeout(() => {
-    setBg((it.pic || "").replace("/s_ratio_poster/", "/l_ratio_poster/").replace("/m_ratio_poster/", "/l_ratio_poster/"));
+    setBg(it.pic || "");
     $("h1", hero).textContent = it.title;
     const fill = d => {
       if (!$(".hero") || $("h1", hero).textContent !== it.title) return;
@@ -413,16 +420,12 @@ function heroFocus(c) {
 
 const PAGES = {
   home(tok, _, restore) {
-    const hist = histAll().slice(0, 16);
     $("#page").innerHTML = `<section class="hero"><h1>妞妞影视</h1><div class="meta"></div><div class="intro">正在加载今日热门…</div><div class="hint">↑ 顶部菜单　·　OK 查看详情　·　返回键退出</div></section>
-      <div class="scroll home" data-lock="row" data-pad="29.5"><div style="height:29.5rem"></div>
-      ${rowHTML("rowHist", "继续观看", hist.map(histCard).join(""))}
+      <div class="scroll home" data-lock="row" data-pad="24"><div style="height:24rem"></div>
       ${HOME_ROWS.map((r, i) => rowHTML("row" + i, r[0], skel(8))).join("")}</div>`;
-    if (!hist.length) $("#rowHist").style.display = "none";
     bindCards($("#page"), heroFocus);
     let focused = false;
     const focusFirst = () => { if (focused || tok !== routeTok) return; focused = true; if (restore && restore.focus && document.contains(restore.focus)) F.set(restore.focus); else F.set($("#page .card.f")); };
-    if (hist.length) focusFirst();
     const loadRow = i => {
       const r = HOME_ROWS[i];
       return dbList(r[1], r[2], r[3], 0, 24).then(d => {

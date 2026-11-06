@@ -91,14 +91,14 @@ public class PlayerActivity extends Activity {
 
         info = new TextView(this);
         info.setTextColor(Color.WHITE);
-        info.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
+        info.setTextSize(TypedValue.COMPLEX_UNIT_SP, 24);
         info.setShadowLayer(8, 0, 2, Color.BLACK);
         info.setPadding(dp(36), dp(24), dp(36), dp(12));
         root.addView(info, new FrameLayout.LayoutParams(-1, -2, Gravity.TOP));
 
         status = new TextView(this);
         status.setTextColor(Color.WHITE);
-        status.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+        status.setTextSize(TypedValue.COMPLEX_UNIT_SP, 22);
         status.setPadding(dp(18), dp(10), dp(18), dp(10));
         GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
                 new int[]{0xE6FF5A36, 0xE6FFB547});

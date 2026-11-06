@@ -420,7 +420,7 @@ const F = {
 let remPx = 20;
 const rem = () => remPx;
 function fit() {
-  remPx = window.innerWidth / 96;
+  remPx = window.innerWidth / 84;
   document.documentElement.style.fontSize = remPx + "px";
 }
 let bgI = 0, bgUrl = "";
@@ -431,11 +431,11 @@ function setBg(url) {
   img.onload = () => {
     if (bgUrl !== url) return;
     bgI ^= 1;
-    ls[bgI].style.backgroundImage = `url("${url}")`;
+    ls[bgI].style.backgroundImage = `url("${img.src}")`;
     ls[bgI].classList.add("on");
     ls[bgI ^ 1].classList.remove("on");
   };
-  img.src = url;
+  img.src = url.replace(/\/[a-z]_ratio_poster\//, "/s_ratio_poster/");
 }
 const TABS = [["home", "\u9996\u9875"], ["movie", "\u7535\u5F71"], ["tv", "\u5267\u96C6"], ["anime", "\u52A8\u6F2B"], ["show", "\u7EFC\u827A"], ["search", "\u641C\u7D22"], ["history", "\u89C2\u770B\u8BB0\u5F55"], ["settings", "\u8BBE\u7F6E"]];
 const stack = [];
@@ -472,6 +472,17 @@ window.nnBack = function() {
   }
   if (route && route.name !== "home") {
     go("home", null, true);
+    return true;
+  }
+  const homeTab = $('#tabs .tab[data-k="home"]');
+  if (F.cur !== homeTab) {
+    const sc = $(".scroll");
+    if (sc) {
+      sc._y = 0;
+      sc.style.transform = "translateY(0)";
+      $$(".row", sc).forEach((r) => r.classList.remove("past"));
+    }
+    F.set(homeTab, true);
     return true;
   }
   return false;
@@ -581,7 +592,7 @@ function heroFocus(c) {
   if (!hero) return;
   clearTimeout(heroTimer);
   heroTimer = setTimeout(() => {
-    setBg((it.pic || "").replace("/s_ratio_poster/", "/l_ratio_poster/").replace("/m_ratio_poster/", "/l_ratio_poster/"));
+    setBg(it.pic || "");
     $("h1", hero).textContent = it.title;
     const fill = (d) => {
       if (!$(".hero") || $("h1", hero).textContent !== it.title) return;
@@ -602,12 +613,9 @@ function heroFocus(c) {
 }
 const PAGES = {
   home(tok, _, restore) {
-    const hist = histAll().slice(0, 16);
     $("#page").innerHTML = `<section class="hero"><h1>\u599E\u599E\u5F71\u89C6</h1><div class="meta"></div><div class="intro">\u6B63\u5728\u52A0\u8F7D\u4ECA\u65E5\u70ED\u95E8\u2026</div><div class="hint">\u2191 \u9876\u90E8\u83DC\u5355\u3000\xB7\u3000OK \u67E5\u770B\u8BE6\u60C5\u3000\xB7\u3000\u8FD4\u56DE\u952E\u9000\u51FA</div></section>
-      <div class="scroll home" data-lock="row" data-pad="29.5"><div style="height:29.5rem"></div>
-      ${rowHTML("rowHist", "\u7EE7\u7EED\u89C2\u770B", hist.map(histCard).join(""))}
+      <div class="scroll home" data-lock="row" data-pad="24"><div style="height:24rem"></div>
       ${HOME_ROWS.map((r, i) => rowHTML("row" + i, r[0], skel(8))).join("")}</div>`;
-    if (!hist.length) $("#rowHist").style.display = "none";
     bindCards($("#page"), heroFocus);
     let focused = false;
     const focusFirst = () => {
@@ -616,7 +624,6 @@ const PAGES = {
       if (restore && restore.focus && document.contains(restore.focus)) F.set(restore.focus);
       else F.set($("#page .card.f"));
     };
-    if (hist.length) focusFirst();
     const loadRow = (i) => {
       const r = HOME_ROWS[i];
       return dbList(r[1], r[2], r[3], 0, 24).then((d) => {
