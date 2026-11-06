@@ -56,8 +56,7 @@ async def main():
             await pg.keyboard.press(k); await pg.wait_for_timeout(600)
         await pg.wait_for_timeout(1500)
         await pg.screenshot(path=OUT / "4-detail-down.png")
-        for k in ["ArrowUp", "ArrowUp", "ArrowUp", "ArrowUp"]:
-            await pg.keyboard.press(k); await pg.wait_for_timeout(400)
+        await pg.evaluate("F.set(document.getElementById('bPlay'))")
         await pg.keyboard.press("Enter"); await pg.wait_for_timeout(1200)
         await pg.screenshot(path=OUT / "5-picking.png")
         await pg.wait_for_timeout(12000)
