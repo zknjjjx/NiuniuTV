@@ -127,7 +127,7 @@ public class PlayerActivity extends Activity {
         player = new ExoPlayer.Builder(this, new DefaultRenderersFactory(this)
                 .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
                 .setEnableDecoderFallback(true))
-                .setMediaSourceFactory(new DefaultMediaSourceFactory(http))
+                .setMediaSourceFactory(new DefaultMediaSourceFactory(new AdFilter.Factory(http)))
                 .setLoadControl(lc).build();
         view.setPlayer(player);
         player.addAnalyticsListener(new AnalyticsListener() {

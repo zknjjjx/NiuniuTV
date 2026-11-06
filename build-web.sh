@@ -3,4 +3,4 @@
 set -e
 cd "$(dirname "$0")"
 npx --yes esbuild@0.24.2 web/app.src.js --target=chrome52 --outfile=app/src/main/assets/web/app.js
-cp web/index.html web/style.css web/logo.png web/remote.html app/src/main/assets/web/
+cp web/index.html web/style.css web/logo.png web/wall.jpg web/remote.html app/src/main/assets/web/

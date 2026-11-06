@@ -32,16 +32,16 @@ img{display:block}
 .scroll.home{z-index:2}
 .row{transition:opacity .35s}
 .row.past{opacity:0}
-.hero h1{font-size:2.6rem;font-weight:800;letter-spacing:.02em;text-shadow:0 .2rem 1.6rem rgba(0,0,0,.5);max-width:60rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hero h1{font-size:2.6rem;font-weight:600;letter-spacing:.02em;text-shadow:0 .2rem 1.6rem rgba(0,0,0,.5);max-width:60rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .meta{display:flex;align-items:center;flex-wrap:wrap;margin-top:1rem;font-size:1.2rem;color:rgba(255,255,255,.85)}
-.meta .rate{font-weight:800;color:#1b0d06;background:linear-gradient(90deg,var(--ac),var(--ac2));padding:.12rem .7rem;border-radius:.45rem}
+.meta .rate{font-weight:600;color:#1b0d06;background:linear-gradient(90deg,var(--ac),var(--ac2));padding:.12rem .7rem;border-radius:.45rem}
 .meta .pill{padding:.12rem .7rem;border-radius:.45rem;background:rgba(255,255,255,.1);border:1px solid var(--line)}
 .hero .intro{margin-top:1rem;max-width:56rem;font-size:1.2rem;line-height:1.7;color:rgba(255,255,255,.82);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:4.1rem;margin-top:.7rem}
 .hero .hint{margin-top:.6rem;font-size:1rem;color:rgba(255,255,255,.5)}
 
 /* 横排 */
 .row{padding:0 0 1.6rem}
-.row h3{font-size:1.5rem;font-weight:700;padding:0 3.2rem .9rem;display:flex;align-items:center}
+.row h3{font-size:1.5rem;font-weight:500;padding:0 3.2rem .9rem;display:flex;align-items:center}
 .row h3:before{content:"";width:.3rem;height:1.2rem;border-radius:.2rem;background:linear-gradient(180deg,var(--ac),var(--ac2))}
 .row h3 small{margin-left:.8rem;font-size:1.05rem;font-weight:400;opacity:.5}
 .vp{overflow:visible;padding:0 3.2rem}
@@ -51,13 +51,13 @@ img{display:block}
 .card{flex:0 0 auto;width:11rem;position:relative;transition:transform .25s cubic-bezier(.2,.8,.2,1)}
 .card .pic{width:11rem;height:15.6rem;border-radius:.9rem;overflow:hidden;background:rgba(255,255,255,.06) center/cover no-repeat;position:relative;border:1px solid rgba(255,255,255,.06)}
 .card .pic:after{display:none;content:"";position:absolute;left:0;right:0;bottom:0;height:40%;background:linear-gradient(180deg,transparent,rgba(0,0,0,.75))}
-.card .badge{position:absolute;right:.5rem;top:.5rem;z-index:2;font-size:1rem;font-weight:800;color:#1b0d06;background:linear-gradient(90deg,var(--ac),var(--ac2));padding:.05rem .45rem;border-radius:.4rem}
+.card .badge{position:absolute;right:.5rem;top:.5rem;z-index:2;font-size:1rem;font-weight:600;color:#1b0d06;background:linear-gradient(90deg,var(--ac),var(--ac2));padding:.05rem .45rem;border-radius:.4rem}
 .card .sub{text-shadow:0 1px 3px #000,0 0 6px rgba(0,0,0,.8);position:absolute;left:.6rem;right:.6rem;bottom:.5rem;z-index:2;font-size:1rem;color:rgba(255,255,255,.85);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .card .prog{position:absolute;left:0;bottom:0;height:.25rem;z-index:3;background:linear-gradient(90deg,var(--ac),var(--ac2))}
 .card .t{margin-top:.5rem;font-size:1.15rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:rgba(255,255,255,.85);transition:color .2s}
 .card.focus{transform:scale(1.1);z-index:3}
 .card.focus .pic{box-shadow:0 0 0 .2rem #fff,0 0 0 .4rem var(--ac)}
-.card.focus .t{color:#fff;font-weight:700}
+.card.focus .t{color:#fff;font-weight:500}
 .card.wide{width:17rem}.card.wide .pic{width:17rem;height:9.6rem}
 .person{flex:0 0 auto;width:8rem;text-align:center;transition:transform .25s}
 .person .av{width:7rem;height:7rem;margin:0 auto;border-radius:50%;background:rgba(255,255,255,.08) center/cover no-repeat;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:2rem;color:rgba(255,255,255,.5)}
@@ -68,7 +68,7 @@ img{display:block}
 
 /* 网格页 */
 .pagehead{padding:5.6rem 3.2rem 1rem;display:flex;align-items:flex-end}
-.pagehead h2{font-size:2.2rem;font-weight:800}
+.pagehead h2{font-size:2.2rem;font-weight:600}
 .pagehead span{opacity:.6;font-size:1.15rem;padding-bottom:.35rem}
 .chips{display:flex;flex-wrap:wrap;padding:0 3.2rem 1.4rem}
 .chip{font-size:1.2rem;padding:.45rem 1.15rem;border-radius:2rem;background:var(--glass);border:1px solid var(--line);color:rgba(255,255,255,.8);transition:all .2s}
@@ -81,12 +81,12 @@ img{display:block}
 .dt{display:flex;padding:5.8rem 3.2rem 1.4rem;align-items:flex-start}
 .dt .poster{flex:0 0 auto;width:15rem;height:21.2rem;border-radius:1.2rem;background:rgba(255,255,255,.06) center/cover;box-shadow:0 1.6rem 3.6rem rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.1)}
 .dt .info{flex:1;min-width:0}
-.dt h1{font-size:2.6rem;font-weight:800;line-height:1.2}
+.dt h1{font-size:2.6rem;font-weight:600;line-height:1.2}
 .dt .orig{font-size:1.2rem;opacity:.55;margin-top:.35rem}
 .dt .intro{margin-top:1rem;font-size:1.22rem;line-height:1.7;color:rgba(255,255,255,.85);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;max-width:62rem}
 .dt .crew{margin-top:.8rem;font-size:1.15rem;color:rgba(255,255,255,.6);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:62rem}
 .acts{display:flex;margin-top:1.3rem}
-.btn{display:flex;align-items:center;font-size:1.3rem;font-weight:700;padding:.8rem 1.8rem;border-radius:3rem;background:var(--glass);border:1px solid var(--line);transition:all .2s;white-space:nowrap}
+.btn{display:flex;align-items:center;font-size:1.3rem;font-weight:500;padding:.8rem 1.8rem;border-radius:3rem;background:var(--glass);border:1px solid var(--line);transition:all .2s;white-space:nowrap}
 .btn svg{width:1.5rem;height:1.5rem;fill:currentColor}
 .btn.pri{background:rgba(255,255,255,.92);color:#16110d}
 .btn.focus{background:linear-gradient(90deg,var(--ac),var(--ac2));color:#1b0d06;border-color:transparent;transform:scale(1.07);box-shadow:0 .6rem 2rem rgba(255,90,54,.55)}
@@ -128,7 +128,7 @@ img{display:block}
 .setrow small{margin-left:auto;opacity:.6;font-size:1.1rem;max-width:44rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .setrow.focus{border-color:var(--ac);background:rgba(255,90,54,.16);transform:scale(1.02)}
 
-#toast{position:fixed;left:50%;bottom:3.4rem;z-index:60;transform:translate(-50%,2rem);opacity:0;transition:all .3s;padding:.8rem 1.6rem;border-radius:2rem;font-size:1.3rem;color:#1b0d06;font-weight:700;background:linear-gradient(90deg,var(--ac),var(--ac2));box-shadow:0 .6rem 2rem rgba(255,90,54,.45)}
+#toast{position:fixed;left:50%;bottom:3.4rem;z-index:60;transform:translate(-50%,2rem);opacity:0;transition:all .3s;padding:.8rem 1.6rem;border-radius:2rem;font-size:1.3rem;color:#1b0d06;font-weight:500;background:linear-gradient(90deg,var(--ac),var(--ac2));box-shadow:0 .6rem 2rem rgba(255,90,54,.45)}
 #toast.on{opacity:1;transform:translate(-50%,0)}
 .skel{background:linear-gradient(90deg,rgba(255,255,255,.05),rgba(255,255,255,.11),rgba(255,255,255,.05));background-size:200% 100%;animation:skp 1.4s ease-in-out infinite}
 @keyframes skp{50%{opacity:.5}}
@@ -155,7 +155,7 @@ img{display:block}
 .lan{position:absolute;right:3.2rem;top:6.8rem;width:19rem;padding:1.4rem;border-radius:1.2rem;background:var(--glass);border:1px solid var(--line);text-align:center}
 .lan img{width:13rem;height:13rem;margin:0 auto;border-radius:.6rem;background:#fff;padding:.5rem}
 .lan b{display:block;font-size:1.3rem;margin-bottom:.9rem}
-.lan .u{margin-top:.9rem;font-size:1.25rem;color:var(--ac2);font-weight:700;word-break:break-all}
+.lan .u{margin-top:.9rem;font-size:1.25rem;color:var(--ac2);font-weight:500;word-break:break-all}
 .lan small{display:block;margin-top:.5rem;font-size:1rem;opacity:.65;line-height:1.5}
 .setwrap .setrow{max-width:none;margin-right:25rem}
 
@@ -202,3 +202,15 @@ body:not(.poster) #bg .vig{opacity:0}
 #bg:before{content:"";position:absolute;left:0;top:0;right:0;bottom:0;background:radial-gradient(70% 60% at 50% 0%,rgba(40,44,62,.9),transparent 70%),linear-gradient(180deg,#12131b 0%,#0b0c10 70%)}
 body:not(.poster) #bg .aur{background:radial-gradient(42% 34% at 16% 14%,rgba(255,90,54,.24),transparent 62%),radial-gradient(38% 32% at 84% 26%,rgba(120,90,255,.22),transparent 62%),radial-gradient(44% 34% at 50% 94%,rgba(255,181,71,.16),transparent 62%),radial-gradient(30% 26% at 60% 55%,rgba(80,170,255,.08),transparent 62%)}
 .scroll.home .row h3{padding-top:.2rem}
+
+/* 2.4：静态壁纸、无动效、焦点只框选 */
+#bg{background:#0d0f16 url(wall.jpg) center/cover no-repeat}
+#bg:before,#bg .aur,#bg .spark{display:none!important}
+#top:after{display:none}
+.card,.card .t,.card .pic:after{transition:none}
+.card.focus{transform:none}
+.card .pic:after{display:none!important}
+.card.focus .pic{box-shadow:0 0 0 .16rem rgba(255,255,255,.95),0 0 0 .32rem var(--ac)}
+.card.focus .t{font-weight:400;color:#fff}
+.chip.focus,.tab.focus{transform:none}
+.skel{animation:none}
