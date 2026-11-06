@@ -31,7 +31,7 @@ jobs:
           printf 'storeFile=%s\nkeyAlias=niuniu\nstorePassword=niuniutv\n' "$GITHUB_WORKSPACE/keystore/niuniu.p12" > local.properties
           echo "sdk.dir=$ANDROID_HOME" >> local.properties
       - name: 构建电视版
-        run: ./gradlew --no-configuration-cache assembleLeanbackRelease
+        run: bash ./gradlew --no-configuration-cache assembleLeanbackRelease
       - name: 整理 APK
         run: |
           mkdir out

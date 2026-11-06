@@ -25,6 +25,11 @@
     <color name="white_70">#B3FFFFFF</color>
     <color name="white_80">#CCFFFFFF</color>
     <color name="white_90">#E6FFFFFF</color>
-    <color name="splash_background">#141218</color>
+    <color name="splash_background">#0B0C10</color>
+    <color name="nn_bg">#0B0C10</color>
+    <color name="nn_card">#1A1D25</color>
+    <color name="nn_ac">#FF5A36</color>
+    <color name="nn_ac2">#FFB547</color>
+    <color name="nn_ac_40">#66FF5A36</color>
 
 </resources>

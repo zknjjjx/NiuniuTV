@@ -10,4 +10,5 @@
         android:right="14dp"
         android:top="8dp" />
 
+<solid android:color="@color/nn_ac_40" />
 </shape>
