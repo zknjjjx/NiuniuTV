@@ -157,3 +157,24 @@ img{display:block}
 .lan .u{margin-top:.9rem;font-size:1.25rem;color:var(--ac2);font-weight:700;word-break:break-all}
 .lan small{display:block;margin-top:.5rem;font-size:1rem;opacity:.65;line-height:1.5}
 .setwrap .setrow{max-width:none;margin-right:25rem}
+
+/* ---- 晶莹通透：玻璃高光（纯渐变+内描边，不用 blur，老电视也流畅） ---- */
+:root{--gl:linear-gradient(180deg,rgba(255,255,255,.17) 0%,rgba(255,255,255,.06) 48%,rgba(255,255,255,.035) 100%);--gb:rgba(255,255,255,.16);--gt:rgba(255,255,255,.42);--hi:inset 0 1px 0 rgba(255,255,255,.32),inset 0 -1px 0 rgba(255,255,255,.04);
+  --acg:linear-gradient(180deg,rgba(255,255,255,.42) 0%,rgba(255,255,255,.08) 50%,rgba(255,255,255,0) 51%),linear-gradient(90deg,var(--ac),var(--ac2))}
+#tabs{padding:.35rem;border-radius:3rem;background:var(--gl);border:1px solid var(--gb);border-top-color:var(--gt);box-shadow:var(--hi)}
+.tab.on{background:rgba(255,255,255,.14);box-shadow:inset 0 1px 0 rgba(255,255,255,.3)}
+.tab.focus{background:var(--acg);box-shadow:inset 0 1px 0 rgba(255,255,255,.6),0 .3rem 1.2rem rgba(255,90,54,.35)}
+.chip,.btn,.ep,.sbox,.setrow,.lan{background:var(--gl);border:1px solid var(--gb);border-top-color:var(--gt);box-shadow:var(--hi)}
+.btn.pri{background:linear-gradient(180deg,#fff 0%,rgba(255,255,255,.86) 100%);box-shadow:inset 0 -2px 0 rgba(0,0,0,.08)}
+.chip.on{background:linear-gradient(180deg,rgba(255,90,54,.32),rgba(255,90,54,.12));border-color:rgba(255,120,80,.6)}
+.chip.focus,.btn.focus,.ep.focus{background:var(--acg);border-color:rgba(255,255,255,.5);box-shadow:inset 0 1px 0 rgba(255,255,255,.65),0 .4rem 1.4rem rgba(255,90,54,.4)}
+.setrow.focus{background:linear-gradient(180deg,rgba(255,140,90,.34),rgba(255,90,54,.14));border-color:rgba(255,170,120,.75);box-shadow:inset 0 1px 0 rgba(255,255,255,.45)}
+.sbox.focus{border-color:rgba(255,170,120,.85);box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 0 0 .2rem rgba(255,90,54,.3)}
+.panel{background:linear-gradient(180deg,rgba(52,54,66,.86),rgba(24,25,32,.9));border:1px solid rgba(255,255,255,.18);border-top-color:rgba(255,255,255,.4);box-shadow:inset 0 1px 0 rgba(255,255,255,.25),0 2rem 6rem rgba(0,0,0,.6)}
+.card .pic{border:1px solid rgba(255,255,255,.14);border-top-color:rgba(255,255,255,.3)}
+.card .pic:after{display:block;top:0;bottom:auto;height:100%;background:linear-gradient(160deg,rgba(255,255,255,.16) 0%,rgba(255,255,255,0) 32%),linear-gradient(180deg,transparent 62%,rgba(0,0,0,.6));opacity:.6;transition:opacity .25s}
+.card.focus .pic:after{opacity:1;background:linear-gradient(150deg,rgba(255,255,255,.34) 0%,rgba(255,255,255,.06) 30%,rgba(255,255,255,0) 31%),linear-gradient(180deg,transparent 62%,rgba(0,0,0,.6))}
+.card.focus .pic{box-shadow:0 0 0 .18rem rgba(255,255,255,.95),0 0 0 .38rem var(--ac),0 .8rem 2rem rgba(255,90,54,.3)}
+.card .badge{background:var(--acg);box-shadow:inset 0 1px 0 rgba(255,255,255,.55)}
+.hero .pill,.dt .pill{background:var(--gl);border:1px solid var(--gb);border-top-color:var(--gt)}
+.dt .poster{border:1px solid rgba(255,255,255,.2);border-top-color:rgba(255,255,255,.45)}
