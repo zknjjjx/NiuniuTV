@@ -340,7 +340,23 @@ const F = {
     if (el.tagName === "INPUT") el.focus();
     else if (document.activeElement && document.activeElement.tagName === "INPUT") document.activeElement.blur();
   },
+  revealEp(el) {
+    const vp = el.closest(".epvp"), list = vp && vp.firstChild;
+    if (!list) return;
+    const H = vp.clientHeight, t = el.offsetTop, h = el.offsetHeight;
+    let y = list._y || 0;
+    if (t - y < h * 1.2) y = t - h * 1.2;
+    else if (t + h - y > H - h * 1.2) y = t + h - H + h * 1.2;
+    y = Math.max(0, Math.min(y, list.scrollHeight - H + h * 0.3));
+    if (list.scrollHeight <= H) y = 0;
+    list._y = y;
+    list.style.transform = `translate3d(0,${-y}px,0)`;
+  },
   reveal(el) {
+    if (el.closest(".epvp")) {
+      F.revealEp(el);
+      return;
+    }
     const track = el.closest(".track");
     if (track) {
       const vp = track.parentElement, vw = vp.clientWidth;
@@ -418,8 +434,11 @@ const F = {
     const g0 = cur.closest("[data-g]");
     if ((dir === "left" || dir === "right") && g0 && g0.classList.contains("track")) {
       const items = $$(".f", g0), i = items.indexOf(cur), nx = items[i + (dir === "left" ? -1 : 1)];
-      if (nx) F.set(nx);
-      return;
+      if (nx) {
+        F.set(nx);
+        return;
+      }
+      if (!document.querySelector(".epcol")) return;
     }
     let best = null, bs = 1e12;
     all.forEach((el) => {
@@ -446,13 +465,19 @@ const F = {
       }
       if (main <= 0) return;
       const horiz = dir === "left" || dir === "right";
-      if (horiz && g0 && el.closest("[data-g]") !== g0) return;
+      if (horiz && g0 && el.closest("[data-g]") !== g0 && !F.cross) return;
       const s = main + cross * (horiz ? 4 : 1.2);
       if (s < bs) {
         bs = s;
         best = el;
       }
     });
+    if (!best && (dir === "left" || dir === "right") && !F.cross && $(".epcol")) {
+      F.cross = true;
+      F.move(dir);
+      F.cross = false;
+      return;
+    }
     if (!best) return;
     if (!(dir === "left" || dir === "right")) {
       const g = best.closest("[data-g]");
@@ -800,12 +825,12 @@ const PAGES = {
     return __async(this, null, function* () {
       const kind = it.type === "tv" ? "tv" : "movie";
       setBg(it.pic);
-      $("#page").innerHTML = `<div class="scroll" data-hidetop="1" data-pad="6"><section class="dt"><div class="poster" style="background-image:url('${esc(it.pic)}')"></div>
+      $("#page").innerHTML = `<div class="dtwrap"><section class="dt"><div class="poster" style="background-image:url('${esc(it.pic)}')"></div>
       <div class="info"><h1>${esc(it.title)}</h1><div class="orig"></div><div class="meta"></div><div class="crew"></div><div class="intro"></div>
-      <div class="acts" data-g="acts"><div class="btn pri f" id="bPlay">${ICON_PLAY}<span>\u64AD\u653E</span></div><div class="btn f" id="bEps" style="display:none">${ICON_LIST}<span>\u9009\u96C6</span></div><div class="btn f" id="bIntro">${ICON_INFO}<span>\u7B80\u4ECB</span></div></div>
+      <div class="acts" data-g="acts"><div class="btn pri f" id="bPlay">${ICON_PLAY}<span>\u64AD\u653E</span></div><div class="btn f" id="bIntro">${ICON_INFO}<span>\u5B8C\u6574\u7B80\u4ECB</span></div></div>
       <div class="srcline"><i class="lamp wait"></i><span id="srcSt">\u6B63\u5728\u5168\u7F51\u627E\u7247\u6E90\u2026</span></div></div></section>
-      <section class="row eps-wrap sec" id="epsSec" style="display:none"><h3>\u9009\u96C6 <small id="epsInfo"></small></h3><div class="ranges" data-g="ranges"></div><div class="eps" data-g="eps"></div></section>
-      <div id="castRow"></div><div id="recRow"></div></div>`;
+      <div id="castRow"></div></div>
+      <aside class="epcol" id="epsSec" style="display:none"><h3>\u9009\u96C6 <small id="epsInfo"></small></h3><div class="epvp"><div class="eps" data-g="eps"></div></div></aside>`;
       F.set($("#bPlay"));
       const key = histKey({ id: it.id, type: kind, title: it.title });
       const st = { srcs: [], done: false, probing: 0, probed: 0 };
@@ -850,25 +875,16 @@ const PAGES = {
         if (!best || best.eps.length < 2 || best.eps.length <= epsShown || !$("#epsSec")) return;
         if (F.cur && F.cur.closest("#epsSec")) return;
         epsShown = best.eps.length;
-        $("#bEps").style.display = "";
         $("#epsSec").style.display = "";
+        $(".dtwrap").classList.add("haseps");
         $("#epsInfo").textContent = `\u5171 ${best.eps.length} \u96C6${best.remarks ? " \xB7 " + best.remarks : ""}`;
         const h = hist(), cur = h ? h.ei : -1;
-        const per = 30, n = best.eps.length, pages = Math.ceil(n / per);
-        const drawPage = (p) => {
-          $(".eps").innerHTML = best.eps.slice(p * per, p * per + per).map((e, i) => `<div class="ep f${p * per + i === cur ? " cur" : ""}" data-i="${p * per + i}">${esc(e.name)}</div>`).join("");
-          $$(".ep").forEach((b) => {
-            b._ok = () => startPlay(+b.dataset.i, 0);
-          });
-        };
-        $(".ranges").innerHTML = pages > 1 ? Array.from({ length: pages }, (_, p) => `<div class="chip f${p === Math.floor(Math.max(cur, 0) / per) ? " on" : ""}" data-p="${p}">${p * per + 1}-${Math.min(n, p * per + per)}</div>`).join("") : "";
-        $$(".ranges .chip").forEach((c) => {
-          c._onfocus = () => {
-            $$(".ranges .chip").forEach((x) => x.classList.toggle("on", x === c));
-            drawPage(+c.dataset.p);
-          };
+        $(".eps").innerHTML = best.eps.map((e, i) => `<div class="ep f${i === cur ? " cur" : ""}" data-i="${i}">${esc(e.name)}</div>`).join("");
+        $$(".ep").forEach((b) => {
+          b._ok = () => startPlay(+b.dataset.i, 0);
         });
-        drawPage(Math.floor(Math.max(cur, 0) / per));
+        const c0 = $(".ep.cur");
+        if (c0) F.revealEp(c0);
       };
       const found = (s) => {
         if (tok !== routeTok) return;
@@ -947,7 +963,6 @@ const PAGES = {
         const h = hist();
         startPlay(h ? h.ei : 0, h ? h.pos : 0);
       };
-      $("#bEps")._ok = () => F.set($(".ep.cur") || $(".ep"));
       $("#bIntro")._ok = () => openLayer(`<div class="panel"><h2>${esc(meta.title)}</h2><p>${esc(meta.intro || "\u6682\u65E0\u7B80\u4ECB")}</p><div class="acts" style="margin-top:1.6rem"><div class="btn f">\u5173\u95ED</div></div></div>`);
       $("#layer")._dummy = 0;
       window.__refreshDetail = () => {
@@ -985,10 +1000,6 @@ const PAGES = {
             p._ok = () => go("search", d.cast[i].name);
           });
         }
-        const recs = yield dbRecs(kind, it.id);
-        if (tok !== routeTok || !recs.length) return;
-        $("#recRow").innerHTML = rowHTML("rowRec", "\u76F8\u5173\u63A8\u8350", recs.map((r) => card(r, { sub: short(r.sub).split(" \xB7 ")[0] })).join(""));
-        bindCards($("#recRow"));
         if (restore && restore.focus && document.contains(restore.focus)) F.set(restore.focus);
       } catch (e) {
         $(".dt .intro").textContent = "\u8C46\u74E3\u8BE6\u60C5\u52A0\u8F7D\u5931\u8D25";

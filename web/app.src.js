@@ -211,7 +211,20 @@ const F = {
     if (el.closest("#top")) $("#top").classList.remove("hide");
     if (el.tagName === "INPUT") el.focus(); else if (document.activeElement && document.activeElement.tagName === "INPUT") document.activeElement.blur();
   },
+  revealEp(el) {
+    const vp = el.closest(".epvp"), list = vp && vp.firstChild;
+    if (!list) return;
+    const H = vp.clientHeight, t = el.offsetTop, h = el.offsetHeight;
+    let y = list._y || 0;
+    if (t - y < h * 1.2) y = t - h * 1.2;
+    else if (t + h - y > H - h * 1.2) y = t + h - H + h * 1.2;
+    y = Math.max(0, Math.min(y, list.scrollHeight - H + h * 0.3));
+    if (list.scrollHeight <= H) y = 0;
+    list._y = y;
+    list.style.transform = `translate3d(0,${-y}px,0)`;
+  },
   reveal(el) {
+    if (el.closest(".epvp")) { F.revealEp(el); return; }
     // 横排：平移轨道，让焦点卡片尽量靠左第二个位置
     const track = el.closest(".track");
     if (track) {
@@ -273,8 +286,8 @@ const F = {
     const g0 = cur.closest("[data-g]");
     if ((dir === "left" || dir === "right") && g0 && g0.classList.contains("track")) {
       const items = $$(".f", g0), i = items.indexOf(cur), nx = items[i + (dir === "left" ? -1 : 1)];
-      if (nx) F.set(nx);
-      return;
+      if (nx) { F.set(nx); return; }
+      if (!document.querySelector(".epcol")) return;
     }
     let best = null, bs = 1e12;
     all.forEach(el => {
@@ -289,10 +302,11 @@ const F = {
       if (main <= 0) return;
       const horiz = dir === "left" || dir === "right";
       // 左右只在同一组里走
-      if (horiz && g0 && el.closest("[data-g]") !== g0) return;
+      if (horiz && g0 && el.closest("[data-g]") !== g0 && !F.cross) return;
       const s = main + cross * (horiz ? 4 : 1.2);
       if (s < bs) { bs = s; best = el; }
     });
+    if (!best && (dir === "left" || dir === "right") && !F.cross && $(".epcol")) { F.cross = true; F.move(dir); F.cross = false; return; }
     if (!best) return;
     if (!(dir === "left" || dir === "right")) {
       const g = best.closest("[data-g]");
@@ -522,12 +536,12 @@ const PAGES = {
   async detail(tok, it, restore) {
     const kind = it.type === "tv" ? "tv" : "movie";
     setBg(it.pic);
-    $("#page").innerHTML = `<div class="scroll" data-hidetop="1" data-pad="6"><section class="dt"><div class="poster" style="background-image:url('${esc(it.pic)}')"></div>
+    $("#page").innerHTML = `<div class="dtwrap"><section class="dt"><div class="poster" style="background-image:url('${esc(it.pic)}')"></div>
       <div class="info"><h1>${esc(it.title)}</h1><div class="orig"></div><div class="meta"></div><div class="crew"></div><div class="intro"></div>
-      <div class="acts" data-g="acts"><div class="btn pri f" id="bPlay">${ICON_PLAY}<span>播放</span></div><div class="btn f" id="bEps" style="display:none">${ICON_LIST}<span>选集</span></div><div class="btn f" id="bIntro">${ICON_INFO}<span>简介</span></div></div>
+      <div class="acts" data-g="acts"><div class="btn pri f" id="bPlay">${ICON_PLAY}<span>播放</span></div><div class="btn f" id="bIntro">${ICON_INFO}<span>完整简介</span></div></div>
       <div class="srcline"><i class="lamp wait"></i><span id="srcSt">正在全网找片源…</span></div></div></section>
-      <section class="row eps-wrap sec" id="epsSec" style="display:none"><h3>选集 <small id="epsInfo"></small></h3><div class="ranges" data-g="ranges"></div><div class="eps" data-g="eps"></div></section>
-      <div id="castRow"></div><div id="recRow"></div></div>`;
+      <div id="castRow"></div></div>
+      <aside class="epcol" id="epsSec" style="display:none"><h3>选集 <small id="epsInfo"></small></h3><div class="epvp"><div class="eps" data-g="eps"></div></div></aside>`;
     F.set($("#bPlay"));
     const key = histKey({ id: it.id, type: kind, title: it.title });
     const st = { srcs: [], done: false, probing: 0, probed: 0 };
@@ -561,18 +575,14 @@ const PAGES = {
       if (!best || best.eps.length < 2 || best.eps.length <= epsShown || !$("#epsSec")) return;
       if (F.cur && F.cur.closest("#epsSec")) return;  // 正在选集时不重画
       epsShown = best.eps.length;
-      $("#bEps").style.display = "";
       $("#epsSec").style.display = "";
+      $(".dtwrap").classList.add("haseps");
       $("#epsInfo").textContent = `共 ${best.eps.length} 集${best.remarks ? " · " + best.remarks : ""}`;
       const h = hist(), cur = h ? h.ei : -1;
-      const per = 30, n = best.eps.length, pages = Math.ceil(n / per);
-      const drawPage = p => {
-        $(".eps").innerHTML = best.eps.slice(p * per, p * per + per).map((e, i) => `<div class="ep f${p * per + i === cur ? " cur" : ""}" data-i="${p * per + i}">${esc(e.name)}</div>`).join("");
-        $$(".ep").forEach(b => { b._ok = () => startPlay(+b.dataset.i, 0); });
-      };
-      $(".ranges").innerHTML = pages > 1 ? Array.from({ length: pages }, (_, p) => `<div class="chip f${p === Math.floor(Math.max(cur, 0) / per) ? " on" : ""}" data-p="${p}">${p * per + 1}-${Math.min(n, p * per + per)}</div>`).join("") : "";
-      $$(".ranges .chip").forEach(c => { c._onfocus = () => { $$(".ranges .chip").forEach(x => x.classList.toggle("on", x === c)); drawPage(+c.dataset.p); }; });
-      drawPage(Math.floor(Math.max(cur, 0) / per));
+      $(".eps").innerHTML = best.eps.map((e, i) => `<div class="ep f${i === cur ? " cur" : ""}" data-i="${i}">${esc(e.name)}</div>`).join("");
+      $$(".ep").forEach(b => { b._ok = () => startPlay(+b.dataset.i, 0); });
+      const c0 = $(".ep.cur");
+      if (c0) F.revealEp(c0);
     };
     const found = s => {
       if (tok !== routeTok) return;
@@ -619,7 +629,6 @@ const PAGES = {
       if (APP) NN.play(JSON.stringify(data)); else toast(`将播放「${list[0].site}」${list[0].eps[Math.min(ei, list[0].eps.length - 1)].name}`);
     }
     $("#bPlay")._ok = () => { const h = hist(); startPlay(h ? h.ei : 0, h ? h.pos : 0); };
-    $("#bEps")._ok = () => F.set($(".ep.cur") || $(".ep"));
     $("#bIntro")._ok = () => openLayer(`<div class="panel"><h2>${esc(meta.title)}</h2><p>${esc(meta.intro || "暂无简介")}</p><div class="acts" style="margin-top:1.6rem"><div class="btn f">关闭</div></div></div>`);
     $("#layer")._dummy = 0;
     window.__refreshDetail = () => { playLabel(); epsShown = 0; showEps(); };
@@ -645,10 +654,6 @@ const PAGES = {
         $("#castRow").innerHTML = rowHTML("rowCast", "演职员", d.cast.map(c => `<div class="person f"><div class="av"${c.avatar ? ` style="background-image:url('${esc(c.avatar)}')"` : ""}>${c.avatar ? "" : esc((c.name || "?")[0])}</div><b>${esc(c.name)}</b><small>${esc(c.role)}</small></div>`).join(""));
         $$("#rowCast .person").forEach((p, i) => { p._ok = () => go("search", d.cast[i].name); });
       }
-      const recs = await dbRecs(kind, it.id);
-      if (tok !== routeTok || !recs.length) return;
-      $("#recRow").innerHTML = rowHTML("rowRec", "相关推荐", recs.map(r => card(r, { sub: short(r.sub).split(" · ")[0] })).join(""));
-      bindCards($("#recRow"));
       if (restore && restore.focus && document.contains(restore.focus)) F.set(restore.focus);
     } catch (e) {
       $(".dt .intro").textContent = "豆瓣详情加载失败";

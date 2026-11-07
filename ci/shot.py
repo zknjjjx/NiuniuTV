@@ -52,8 +52,9 @@ async def main():
         await pg.screenshot(path=OUT / "2-home-row2.png")
         await pg.keyboard.press("Enter"); await pg.wait_for_timeout(10000)
         await pg.screenshot(path=OUT / "3-detail.png")
-        for k in ["ArrowDown", "ArrowDown"]:
-            await pg.keyboard.press(k); await pg.wait_for_timeout(600)
+        for k in ["ArrowRight", "ArrowRight"] + ["ArrowDown"] * 8:
+            await pg.keyboard.press(k); await pg.wait_for_timeout(400)
+        logs.append("EPFOCUS: " + await pg.evaluate("F.cur && F.cur.className + ' ' + F.cur.textContent"))
         await pg.wait_for_timeout(1500)
         await pg.screenshot(path=OUT / "4-detail-down.png")
         await pg.evaluate("F.set(document.getElementById('bPlay'))")
