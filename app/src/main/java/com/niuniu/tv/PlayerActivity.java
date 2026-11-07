@@ -67,7 +67,7 @@ public class PlayerActivity extends Activity {
             if (player.getPlaybackState() == Player.STATE_BUFFERING || !started) {
                 // 后台缓存还在进账：不急着换源，最多再等到卡住 90 秒
                 long stuck = android.os.SystemClock.uptimeMillis() - bufSince;
-                if (Pre.progressing(curUrl, 8000) && stuck < 90000) { h.postDelayed(this, 5000); return; }
+                if (started && Pre.progressing(curUrl, 8000) && stuck < 90000) { h.postDelayed(this, 5000); return; }
                 switchSource(started ? "卡顿太久" : "起播太慢");
             }
         }
@@ -76,9 +76,14 @@ public class PlayerActivity extends Activity {
     private String curUrl = "";
     private long bufSince = 0;
     private final Runnable posTick = new Runnable() { public void run() {
-        if (player != null) Pre.position(curUrl, player.getCurrentPosition());
+        reportPos();
         h.postDelayed(this, 1000);
     } };
+    private void reportPos() {
+        if (player == null) return;
+        Pre.position(curUrl, player.getCurrentPosition(), player.getBufferedPosition(),
+                started && player.getPlaybackState() == Player.STATE_READY);
+    }
     private final Runnable saver = new Runnable() { public void run() { save(); h.postDelayed(this, 10000); } };
 
     @Override
@@ -166,6 +171,7 @@ public class PlayerActivity extends Activity {
                     }
                 } else if (st == Player.STATE_BUFFERING) {
                     bufSince = android.os.SystemClock.uptimeMillis();
+                    reportPos();   // 一缓冲就让后台预下载让路
                     h.removeCallbacks(watchdog);
                     h.postDelayed(watchdog, started ? STALL_TIMEOUT : START_TIMEOUT);
                 } else if (st == Player.STATE_ENDED) {

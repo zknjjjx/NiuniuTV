@@ -54,9 +54,17 @@ public class Pre {
             app = c.getApplicationContext();
             File dir = new File(app.getCacheDir(), "media");
             StandaloneDatabaseProvider db = new StandaloneDatabaseProvider(app);
+            // 先改名再后台删，不让清缓存拖慢启动或起播
+            if (dir.exists()) {
+                final File old = new File(app.getCacheDir(), "media-old-" + System.currentTimeMillis());
+                if (!dir.renameTo(old)) deleteTree(dir);
+            }
             try { SimpleCache.delete(dir, db); } catch (Throwable ignore) {}
-            deleteTree(dir);
             dir.mkdirs();
+            new Thread(new Runnable() { public void run() {
+                File[] l = app.getCacheDir().listFiles();
+                if (l != null) for (File f : l) if (f.getName().startsWith("media-old-")) deleteTree(f);
+            } }, "nn-clean").start();
             long free = 0;
             try { free = new StatFs(app.getCacheDir().getPath()).getAvailableBytes(); } catch (Throwable ignore) {}
             capBytes = Math.max(100L << 20, Math.min(1L << 30, free / 5));
@@ -108,18 +116,32 @@ public class Pre {
     static synchronized void start(Context c, String url, long posMs, long aheadMs) {
         if (url == null || url.isEmpty()) return;
         cache(c);
+        boolean player = aheadMs >= AHEAD_MS;
         if (job != null && job.url.equals(url) && !job.dead) {
             job.posUs = Math.max(0, posMs) * 1000;
             job.aheadUs = Math.max(job.aheadUs, aheadMs * 1000);
+            if (player) { job.gated = true; job.ready = false; }
             return;
         }
         if (job != null) job.stop();
         job = new Job(url, posMs, aheadMs);
+        job.gated = player;
         job.start();
     }
 
-    static synchronized void position(String url, long posMs) {
-        if (job != null && job.url.equals(url)) job.posUs = Math.max(0, posMs) * 1000;
+    /**
+     * 播放器每秒报一次进度。播放器没起播、在缓冲、或手里缓冲不足 15 秒时，后台预下载让路，
+     * 网速全部留给播放器自己拉眼前的分片——缓存绝不拖慢起播和卡顿恢复。
+     */
+    static synchronized void position(String url, long posMs, long bufMs, boolean ready) {
+        if (job == null || !job.url.equals(url)) return;
+        long p = Math.max(0, posMs) * 1000;
+        job.posUs = p; job.bufUs = Math.max(p, bufMs * 1000); job.ready = ready;
+        if (!ready) {
+            Seg c = job.curSeg; CacheWriter w = job.writer;
+            // 正在下的分片不是眼前要用的（比如刚快进），立刻停下让路
+            if (c != null && w != null && (c.endUs <= p || c.startUs > p + 15_000_000L)) w.cancel();
+        }
     }
 
     /** 最近 ms 毫秒内后台下载还有进账 */
@@ -131,8 +153,9 @@ public class Pre {
 
     static class Job extends Thread {
         final String url;
-        volatile long posUs, aheadUs, lastData;
-        volatile boolean dead;
+        volatile long posUs, aheadUs, lastData, bufUs;
+        volatile boolean dead, gated, ready;
+        volatile Seg curSeg;
         volatile CacheWriter writer;
         final List<Seg> segs = new ArrayList<>();
 
@@ -191,6 +214,7 @@ public class Pre {
                     Seg next = pick();
                     if (next == null) { sleepQ(800); continue; }
                     final Seg cur = next;
+                    curSeg = cur;
                     try {
                         CacheWriter w = new CacheWriter(new CacheDataSource(cache, http().createDataSource(), CacheDataSource.FLAG_BLOCK_ON_CACHE),
                                 cur.spec, tmp, new CacheWriter.ProgressListener() {
@@ -202,9 +226,10 @@ public class Pre {
                         cur.done = true;
                     } catch (Exception e) {
                         if (dead) break;
+                        if (gated && !ready) continue;   // 被播放器让路取消的，不算失败
                         if (++cur.fails >= 3) cur.done = true;   // 一个分片连失败 3 次就跳过，交给播放器自己拉
                         else sleepQ(1000L * cur.fails);
-                    } finally { writer = null; }
+                    } finally { writer = null; curSeg = null; }
                 }
             } catch (Throwable ignore) {
             } finally { dead = true; }
@@ -220,10 +245,14 @@ public class Pre {
 
         /** 选下一个要下载的分片：初始化段优先，其次从播放位置往后、在领先窗口内第一个没下载的 */
         Seg pick() {
-            long p = posUs, lim = p + aheadUs, ahead = 0;
-            for (Seg s : segs) if (s.startUs < 0 && !s.done) return s;
+            long p = posUs, lim = p + aheadUs, ahead = 0, from = p;
+            if (gated) {
+                if (!ready || bufUs - p < 15_000_000L) return null;
+                from = bufUs;   // 播放器手里已有的不重复拉，从它缓冲的尽头往后下
+            }
+            for (Seg s : segs) if (s.startUs < 0 && !s.done) return gated ? null : s;
             for (Seg s : segs) {
-                if (s.startUs < 0 || s.endUs <= p) continue;
+                if (s.startUs < 0 || s.endUs <= from) continue;
                 if (s.startUs >= lim) return null;
                 if (!s.done) return ahead > capBytes * 6 / 10 ? null : s;
                 ahead += s.size;
