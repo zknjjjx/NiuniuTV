@@ -123,7 +123,7 @@ public class Pre {
             if (player) { job.gated = true; job.ready = false; }
             return;
         }
-        if (job != null) job.stop();
+        if (job != null) job.halt();
         job = new Job(url, posMs, aheadMs);
         job.gated = player;
         job.start();
@@ -165,7 +165,7 @@ public class Pre {
             setPriority(Thread.MIN_PRIORITY + 1);
         }
 
-        void stop() { dead = true; CacheWriter w = writer; if (w != null) w.cancel(); interrupt(); }
+        void halt() { dead = true; CacheWriter w = writer; if (w != null) w.cancel(); interrupt(); }
 
         HlsPlaylist fetch(String u) throws IOException {
             DataSource s = new AdFilter.Factory(http()).createDataSource();
