@@ -1173,6 +1173,7 @@ const PAGES = {
       <div class="setrow f" id="sRefresh"><span>\u5237\u65B0\u7247\u6E90</span><small>${SRC.list.length} \u4E2A\u91C7\u96C6\u7AD9 \xB7 ${esc(SRC.from.replace(/^https?:\/\//, "").slice(0, 60))}</small></div>
       <div class="setrow f" id="sUrl"><span>\u7247\u6E90\u5730\u5740</span><small>${esc(custom || "\u9ED8\u8BA4\uFF1Azknjjjx/tvbox \u7684 cmstv.json\uFF08\u81EA\u52A8\u52A0\u901F\uFF09")}</small></div>
       <div class="setrow f" id="sReset"><span>\u6062\u590D\u9ED8\u8BA4\u7247\u6E90</span><small>\u6E05\u6389\u81EA\u5B9A\u4E49\u5730\u5740</small></div>
+      <div class="setrow f" id="sUpd"><span>\u68C0\u67E5\u66F4\u65B0</span><small id="sUpdS">\u5F53\u524D ${APP ? esc(NN.version()) : "dev"}${UPD.latest ? hasNew() ? ` \xB7 \u6709\u65B0\u7248 ${esc(UPD.latest.version)}\uFF0C\u6309 OK \u5347\u7EA7` : " \xB7 \u5DF2\u662F\u6700\u65B0" : ""}</small></div>
       <div class="setrow f" id="sClear"><span>\u6E05\u9664\u89C2\u770B\u8BB0\u5F55</span><small>${histAll().length} \u6761</small></div>
       <div class="setrow" style="opacity:.6"><span>\u64AD\u653E\u8BF4\u660E</span><small>\u81EA\u52A8\u6D4B\u901F\u6311\u6700\u5FEB\u6E90\uFF1B\u8D77\u64AD 12 \u79D2\u6CA1\u753B\u9762\u6216\u5361\u4F4F 20 \u79D2\u81EA\u52A8\u6362\u6E90\uFF1B\u64AD\u653E\u4E2D\u6309 \u25B2 \u9009\u96C6\u6362\u6E90</small></div></div>`;
       $("#sRefresh")._ok = () => __async(this, null, function* () {
@@ -1203,6 +1204,22 @@ const PAGES = {
         toast("\u5DF2\u6062\u590D\u9ED8\u8BA4\u7247\u6E90");
         render("settings");
       });
+      $("#sUpd")._ok = () => {
+        if (hasNew()) {
+          askUpgrade();
+          return;
+        }
+        $("#sUpdS").textContent = "\u6B63\u5728\u68C0\u67E5\u2026";
+        checkUpdate().then(() => {
+          if (hasNew()) askUpgrade();
+          else {
+            $("#sUpdS").textContent = `\u5F53\u524D ${NN.version()} \xB7 \u5DF2\u662F\u6700\u65B0`;
+            toast("\u5DF2\u662F\u6700\u65B0\u7248\u672C");
+          }
+        }).catch(() => {
+          $("#sUpdS").textContent = "\u68C0\u67E5\u5931\u8D25\uFF0C\u8FDE\u4E0D\u4E0A GitHub";
+        });
+      };
       $("#sClear")._ok = () => {
         histAll().forEach((h) => APP && NN.delHistory(h.key));
         toast("\u5DF2\u6E05\u9664");
@@ -1213,6 +1230,57 @@ const PAGES = {
   }
 };
 let resolving = null;
+const REL = "https://github.com/zknjjjx/NiuniuTV/releases/download/v2-latest/";
+const relMirrors = (f) => [`https://ghfast.top/${REL}${f}`, `https://gh-proxy.com/${REL}${f}`, REL + f];
+const verNum = (v) => String(v || "0").split(".").reduce((a, x) => a * 1e3 + (parseInt(x, 10) || 0), 0);
+const UPD = { latest: null, checking: null };
+function checkUpdate() {
+  if (UPD.checking) return UPD.checking;
+  UPD.checking = anyOf(relMirrors("latest.json?t=" + Date.now()).map((u) => getJSON(u, null, 12e3).then((j) => {
+    if (!j || !j.version || !j.apk) throw new Error("bad");
+    return j;
+  }))).then((j) => {
+    UPD.latest = j;
+    UPD.checking = null;
+    return j;
+  }, (e) => {
+    UPD.checking = null;
+    throw e;
+  });
+  return UPD.checking;
+}
+const hasNew = () => APP && UPD.latest && verNum(UPD.latest.version) > verNum(NN.version());
+function askUpgrade() {
+  const j = UPD.latest;
+  openLayer(`<div class="panel"><h2>\u53D1\u73B0\u65B0\u7248\u672C ${esc(j.version)}</h2><p style="opacity:.75">\u5F53\u524D ${esc(NN.version())}${j.notes ? "<br>" + esc(j.notes) : ""}</p>
+    <p id="upMsg" style="opacity:.6;min-height:1.6em"></p>
+    <div class="acts" style="margin-top:1.2rem"><div class="btn pri f" id="upOk">\u7ACB\u5373\u5347\u7EA7</div><div class="btn f" id="upNo">\u4EE5\u540E\u518D\u8BF4</div></div></div>`, "#upOk");
+  $("#upNo")._ok = closeLayer;
+  $("#upOk")._ok = () => {
+    if (UPD.busy) return;
+    UPD.busy = true;
+    $("#upMsg").textContent = "\u6B63\u5728\u4E0B\u8F7D\u2026";
+    NN.upgrade(JSON.stringify(relMirrors(j.apk)));
+  };
+}
+window.nnUpg = (x) => {
+  const m = $("#upMsg");
+  if (typeof x === "number") {
+    if (m) m.textContent = x >= 100 ? "\u4E0B\u8F7D\u5B8C\u6210\uFF0C\u8BF7\u5728\u5F39\u51FA\u7684\u754C\u9762\u70B9\u201C\u5B89\u88C5\u201D" : `\u6B63\u5728\u4E0B\u8F7D ${x}%`;
+    if (x >= 100) UPD.busy = false;
+  } else {
+    UPD.busy = false;
+    if (m) m.textContent = "\u5347\u7EA7\u5931\u8D25\uFF1A" + x;
+    else toast("\u5347\u7EA7\u5931\u8D25\uFF1A" + x);
+  }
+};
+function autoUpdate() {
+  if (!APP) return;
+  setTimeout(() => checkUpdate().then(() => {
+    if (hasNew() && !$("#layer").classList.contains("on") && route && route.name !== "detail") askUpgrade();
+  }).catch(() => {
+  }), 8e3);
+}
 document.addEventListener("keydown", (e) => {
   const k = e.keyCode;
   const inInput = document.activeElement && document.activeElement.tagName === "INPUT";
@@ -1293,6 +1361,7 @@ function boot() {
   setInterval(clock, 2e4);
   loadSources();
   route = { name: "home" };
+  autoUpdate();
   bootFocus = true;
   render("home");
 }

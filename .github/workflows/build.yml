@@ -34,13 +34,34 @@ jobs:
         run: curl -fsSL --retry 3 https://raw.githubusercontent.com/zknjjjx/tvbox/main/cmstv.json -o /tmp/s.json && python3 -c "import json;json.load(open('/tmp/s.json'))" && cp /tmp/s.json app/src/main/assets/web/sources.json || true
       - run: gradle assembleRelease --no-daemon
       - run: mkdir out && cp app/build/outputs/apk/release/*.apk out/ && ls -la out
+      - name: 生成升级信息 latest.json
+        run: |
+          python3 - <<'PY'
+          import json, re, glob, os, subprocess
+          g = open("app/build.gradle").read()
+          v = re.search(r"versionName '([^']+)'", g).group(1)
+          c = int(re.search(r"versionCode (\d+)", g).group(1))
+          apk = os.path.basename(glob.glob("out/*.apk")[0])
+          msg = subprocess.check_output(["git", "log", "-1", "--pretty=%s"]).decode().strip()
+          json.dump({"version": v, "code": c, "apk": apk, "notes": msg}, open("out/latest.json", "w"), ensure_ascii=False)
+          print(open("out/latest.json").read())
+          PY
       - uses: actions/upload-artifact@v4
         with: { name: apk, path: out/*.apk }
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: v2-latest
-          name: 妞妞影视 2（全新界面）
+          name: 妞妞影视 2（正式版）
           prerelease: false
           make_latest: true
-          files: out/*.apk
-          body: 全新电视界面：豆瓣海报墙、详情简介与演员，自动测速挑最快片源，播放失败或卡顿自动换源。N1 和华为电视都装这一个。
+          files: |
+            out/*.apk
+            out/latest.json
+          body: 全新电视界面：豆瓣海报墙、详情简介与演员，自动测速挑最快片源，播放失败或卡顿自动换源。N1 和华为电视都装这一个。2.6.0 起 App 内可检查更新、一键升级，安装包装完自动删除。
+      - name: 删除旧版本安装包
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          keep=$(basename out/*.apk)
+          gh api repos/${{ github.repository }}/releases/tags/v2-latest --jq '.assets[] | "\(.id) \(.name)"' | while read id name; do
+            case "$name" in "$keep"|latest.json) ;; *) echo "删除 $name"; gh api -X DELETE repos/${{ github.repository }}/releases/assets/$id ;; esac
+          done

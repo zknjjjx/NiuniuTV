@@ -76,6 +76,7 @@ public class MainActivity extends Activity {
                 return null;
             }
         });
+        Upd.cleanup(this, true);  // 升级装完重启、或上次推送的安装包，一律清掉
         lan = new Lan(this, new Lan.Js() { public void run(String code) { js(code); } });
         lan.start();
         setContentView(web);
@@ -151,6 +152,21 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public String version() { return BuildConfigVersion.NAME; }
 
+        /** 在线升级：urls 为 JSON 数组，按顺序尝试；进度和失败通过 nnUpg 回调 */
+        @JavascriptInterface
+        public void upgrade(final String urls) {
+            pool.execute(new Runnable() {
+                public void run() {
+                    try {
+                        org.json.JSONArray a = new org.json.JSONArray(urls);
+                        String[] u = new String[a.length()];
+                        for (int i = 0; i < u.length; i++) u[i] = a.getString(i);
+                        Upd.upgrade(MainActivity.this, u, new Lan.Js() { public void run(String code) { js(code); } });
+                    } catch (Exception e) { js("window.nnUpg&&nnUpg('升级失败')"); }
+                }
+            });
+        }
+
         @JavascriptInterface
         public void toast(final String msg) {
             runOnUiThread(new Runnable() {
@@ -173,6 +189,7 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         if (web != null) { web.onResume(); web.resumeTimers(); }
+        Upd.cleanup(this, false);  // 从安装界面回来（装好或取消）即删安装包
         if (web != null) web.evaluateJavascript("window.nnResume&&nnResume()", null);
         hideBars();
     }
