@@ -916,7 +916,7 @@ function splash() {
   const t0 = Date.now(); let gone = false;
   const go = () => {
     if (gone) return; gone = true;
-    const dog = sp.firstElementChild, logo = $(".brand img");
+    const dog = sp.querySelector(".dog"), logo = $(".brand img");
     const a = dog.getBoundingClientRect(), b = logo.getBoundingClientRect();
     if (!a.width || !b.width) { end(); return; }
     const s = b.width / a.width, dx = b.left + b.width / 2 - (a.left + a.width / 2), dy = b.top + b.height / 2 - (a.top + a.height / 2);

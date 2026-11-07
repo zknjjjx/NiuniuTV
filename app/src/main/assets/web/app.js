@@ -1450,7 +1450,7 @@ function splash() {
   const go2 = () => {
     if (gone) return;
     gone = true;
-    const dog = sp.firstElementChild, logo = $(".brand img");
+    const dog = sp.querySelector(".dog"), logo = $(".brand img");
     const a = dog.getBoundingClientRect(), b = logo.getBoundingClientRect();
     if (!a.width || !b.width) {
       end();
