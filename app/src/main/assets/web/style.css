@@ -313,3 +313,7 @@ body:not(.poster) #bg .aur{background:radial-gradient(42% 34% at 16% 14%,rgba(25
 .tab.dot,.setrow.dot>span{position:relative}
 .tab.dot::after{content:"";position:absolute;top:.35rem;right:.55rem;width:.5rem;height:.5rem;border-radius:50%;background:#ff3b30}
 .setrow.dot>span::after{content:"";position:absolute;top:.15rem;right:-.7rem;width:.5rem;height:.5rem;border-radius:50%;background:#ff3b30}
+.setrow>span{white-space:nowrap;flex-shrink:0}
+.setrow.info{opacity:.6}
+.setrow.info small{white-space:normal;text-align:right;line-height:1.5}
+.setwrap{padding-bottom:3rem}

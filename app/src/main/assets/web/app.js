@@ -405,6 +405,7 @@ const F = {
       else if (top + h - y > pageH - 2 * rem()) y = top + h - pageH + 2 * rem();
       y = Math.max(0, Math.min(y, Math.max(0, sc.scrollHeight - pageH + 2 * rem())));
       if (sc.dataset.lock === "row") y = Math.max(0, top - topPad);
+      else if ($$(".f", sc).pop() === el) y = Math.max(y, sc.scrollHeight - pageH + 2 * rem());
       const rows = $$(".row,.grid-row", sc), tops = rows.map((r) => [r.offsetTop, r.offsetHeight]), at = anchor.offsetTop, lock = sc.dataset.lock === "row";
       rows.forEach((r, i) => {
         const t = tops[i][0], b = t + tops[i][1];
@@ -1183,7 +1184,7 @@ const PAGES = {
         return a.n ? `${a.n} \u4E2A \xB7 ${a.mb} MB\uFF0C\u6309 OK \u5220\u9664` : "\u6CA1\u6709\u6B8B\u7559\uFF0C\u5DF2\u5168\u90E8\u5220\u9664";
       })()}</small></div>
       <div class="setrow f" id="sClear"><span>\u6E05\u9664\u89C2\u770B\u8BB0\u5F55</span><small>${histAll().length} \u6761</small></div>
-      <div class="setrow" style="opacity:.6"><span>\u64AD\u653E\u8BF4\u660E</span><small>\u81EA\u52A8\u6D4B\u901F\u6311\u6700\u5FEB\u6E90\uFF1B\u8D77\u64AD 12 \u79D2\u6CA1\u753B\u9762\u6216\u5361\u4F4F 20 \u79D2\u81EA\u52A8\u6362\u6E90\uFF1B\u64AD\u653E\u4E2D\u6309 \u25B2 \u9009\u96C6\u6362\u6E90</small></div></div>`;
+      <div class="setrow info"><span>\u64AD\u653E\u8BF4\u660E</span><small>\u81EA\u52A8\u6D4B\u901F\u6311\u6700\u5FEB\u6E90\uFF1B\u8D77\u64AD 12 \u79D2\u6CA1\u753B\u9762\u6216\u5361\u4F4F 20 \u79D2\u81EA\u52A8\u6362\u6E90\uFF1B\u64AD\u653E\u4E2D\u6309 \u25B2 \u9009\u96C6\u6362\u6E90</small></div></div>`;
       $("#sRefresh")._ok = () => __async(this, null, function* () {
         toast("\u6B63\u5728\u5237\u65B0\u7247\u6E90\u2026");
         yield loadSources(true);

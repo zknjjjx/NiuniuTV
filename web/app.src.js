@@ -264,6 +264,8 @@ const F = {
       else if (top + h - y > pageH - 2 * rem()) y = top + h - pageH + 2 * rem();
       y = Math.max(0, Math.min(y, Math.max(0, sc.scrollHeight - pageH + 2 * rem())));
       if (sc.dataset.lock === "row") y = Math.max(0, top - topPad);
+      // 最后一个可选项：滚到底，把它下面不能选中的说明文字也露出来
+      else if ($$(".f", sc).pop() === el) y = Math.max(y, sc.scrollHeight - pageH + 2 * rem());
       const rows = $$(".row,.grid-row", sc), tops = rows.map(r => [r.offsetTop, r.offsetHeight]), at = anchor.offsetTop, lock = sc.dataset.lock === "row";
       rows.forEach((r, i) => {
         const t = tops[i][0], b = t + tops[i][1];
@@ -774,7 +776,7 @@ const PAGES = {
       <div class="setrow f" id="sUpd"><span>检查更新</span><small id="sUpdS">当前 ${APP ? esc(NN.version()) : "dev"}${UPD.latest ? (hasNew() ? ` · 有新版 ${esc(UPD.latest.version)}，按 OK 升级` : " · 已是最新") : ""}</small></div>
       <div class="setrow f" id="sApk"><span>安装包残留</span><small id="sApkS">${(() => { let a = { n: 0 }; try { a = APP && NN.apkInfo ? JSON.parse(NN.apkInfo()) : a; } catch (e) {} return a.n ? `${a.n} 个 · ${a.mb} MB，按 OK 删除` : "没有残留，已全部删除"; })()}</small></div>
       <div class="setrow f" id="sClear"><span>清除观看记录</span><small>${histAll().length} 条</small></div>
-      <div class="setrow" style="opacity:.6"><span>播放说明</span><small>自动测速挑最快源；起播 12 秒没画面或卡住 20 秒自动换源；播放中按 ▲ 选集换源</small></div></div>`;
+      <div class="setrow info"><span>播放说明</span><small>自动测速挑最快源；起播 12 秒没画面或卡住 20 秒自动换源；播放中按 ▲ 选集换源</small></div></div>`;
     $("#sRefresh")._ok = async () => { toast("正在刷新片源…"); await loadSources(true); toast(`片源已更新：${SRC.list.length} 个`); render("settings"); };
     $("#sUrl")._ok = () => {
       openLayer(`<div class="panel"><h2>片源地址</h2><p style="opacity:.7">支持 cmstv.json 或 TVBox 配置（只用里面的采集站）。GitHub 地址会自动走加速。</p>

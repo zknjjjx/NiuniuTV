@@ -85,6 +85,11 @@ async def main():
         await pg.wait_for_timeout(3000)
         await pg.screenshot(path=OUT / "8-settings.png")
         logs.append("SET: " + await pg.evaluate("F.cur && F.cur.textContent + ' route=' + route.name"))
+        for i in range(9):
+            await pg.keyboard.press("ArrowDown"); await pg.wait_for_timeout(250)
+        await pg.wait_for_timeout(600)
+        await pg.screenshot(path=OUT / "8b-settings-bottom.png")
+        logs.append("SETBOTTOM: " + await pg.evaluate("F.cur && F.cur.textContent"))
         await pg.evaluate("go('search')"); await pg.wait_for_timeout(1500)
         await pg.evaluate("['X','C','L','F'].forEach(c => [...document.querySelectorAll('.skb .key')].find(k => k.dataset.k === c)._ok())")
         await pg.wait_for_timeout(6000)
