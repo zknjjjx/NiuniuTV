@@ -1219,6 +1219,7 @@ const PAGES = {
         }
         $("#sUpdS").textContent = "\u6B63\u5728\u68C0\u67E5\u2026";
         checkUpdate().then(() => {
+          markNew();
           if (hasNew()) askUpgrade();
           else {
             $("#sUpdS").textContent = `\u5F53\u524D ${NN.version()} \xB7 \u5DF2\u662F\u6700\u65B0`;
@@ -1228,6 +1229,7 @@ const PAGES = {
           $("#sUpdS").textContent = "\u68C0\u67E5\u5931\u8D25\uFF0C\u8FDE\u4E0D\u4E0A GitHub";
         });
       };
+      markNew();
       $("#sApk")._ok = () => {
         if (APP && NN.apkClean) NN.apkClean();
         $("#sApkS").textContent = "\u6CA1\u6709\u6B8B\u7559\uFF0C\u5DF2\u5168\u90E8\u5220\u9664";
@@ -1287,11 +1289,15 @@ window.nnUpg = (x) => {
     else toast("\u5347\u7EA7\u5931\u8D25\uFF1A" + x);
   }
 };
+function markNew() {
+  const t = $('#tabs .tab[data-k="settings"]'), on = hasNew();
+  if (t) t.classList.toggle("dot", on);
+  const r = $("#sUpd");
+  if (r) r.classList.toggle("dot", on);
+}
 function autoUpdate() {
   if (!APP) return;
-  setTimeout(() => checkUpdate().then(() => {
-    if (hasNew() && !$("#layer").classList.contains("on") && route && route.name !== "detail") askUpgrade();
-  }).catch(() => {
+  setTimeout(() => checkUpdate().then(markNew).catch(() => {
   }), 8e3);
 }
 document.addEventListener("keydown", (e) => {

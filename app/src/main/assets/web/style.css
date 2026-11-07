@@ -308,3 +308,8 @@ body:not(.poster) #bg .aur{background:radial-gradient(42% 34% at 16% 14%,rgba(25
 .srch .grid>.card{width:calc((100% - 5.2rem) / 5)}
 .srch .grid>.card:nth-child(6n){margin-right:1.3rem}
 .srch .grid>.card:nth-child(5n){margin-right:0}
+
+/* 新版本红点 */
+.tab.dot,.setrow.dot>span{position:relative}
+.tab.dot::after{content:"";position:absolute;top:.35rem;right:.55rem;width:.5rem;height:.5rem;border-radius:50%;background:#ff3b30}
+.setrow.dot>span::after{content:"";position:absolute;top:.15rem;right:-.7rem;width:.5rem;height:.5rem;border-radius:50%;background:#ff3b30}

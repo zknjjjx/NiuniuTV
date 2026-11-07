@@ -788,9 +788,10 @@ const PAGES = {
     $("#sUpd")._ok = () => {
       if (hasNew()) { askUpgrade(); return; }
       $("#sUpdS").textContent = "正在检查…";
-      checkUpdate().then(() => { if (hasNew()) askUpgrade(); else { $("#sUpdS").textContent = `当前 ${NN.version()} · 已是最新`; toast("已是最新版本"); } })
+      checkUpdate().then(() => { markNew(); if (hasNew()) askUpgrade(); else { $("#sUpdS").textContent = `当前 ${NN.version()} · 已是最新`; toast("已是最新版本"); } })
         .catch(() => { $("#sUpdS").textContent = "检查失败，连不上 GitHub"; });
     };
+    markNew();
     $("#sApk")._ok = () => { if (APP && NN.apkClean) NN.apkClean(); $("#sApkS").textContent = "没有残留，已全部删除"; toast("安装包已删除"); };
     $("#sClear")._ok = () => { histAll().forEach(h => APP && NN.delHistory(h.key)); toast("已清除"); render("settings"); };
     F.set($("#sRefresh"));
@@ -827,9 +828,15 @@ window.nnUpg = x => {
   if (typeof x === "number") { if (m) m.textContent = x >= 100 ? "下载完成，请在弹出的界面点“安装”" : `正在下载 ${x}%`; if (x >= 100) UPD.busy = false; }
   else { UPD.busy = false; if (m) m.textContent = "升级失败：" + x; else toast("升级失败：" + x); }
 };
+function markNew() {
+  const t = $('#tabs .tab[data-k="settings"]'), on = hasNew();
+  if (t) t.classList.toggle("dot", on);
+  const r = $("#sUpd"); if (r) r.classList.toggle("dot", on);
+}
 function autoUpdate() {
   if (!APP) return;
-  setTimeout(() => checkUpdate().then(() => { if (hasNew() && !$("#layer").classList.contains("on") && route && route.name !== "detail") askUpgrade(); }).catch(() => {}), 8000);
+  // 不弹窗：有新版只在「设置」标签和「检查更新」行上亮红点，升不升级由用户决定
+  setTimeout(() => checkUpdate().then(markNew).catch(() => {}), 8000);
 }
 
 /* ---------------- 按键 ---------------- */
