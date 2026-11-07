@@ -1,5 +1,5 @@
 package com.niuniu.tv;
 
 public final class BuildConfigVersion {
-    public static final String NAME = "2.7.5";
+    public static final String NAME = "2.7.6";
 }
