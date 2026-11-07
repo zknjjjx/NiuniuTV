@@ -239,10 +239,13 @@ const F = {
       else if (top - y < topPad) y = top - topPad;
       else if (top + h - y > pageH - 2 * rem()) y = top + h - pageH + 2 * rem();
       y = Math.max(0, Math.min(y, Math.max(0, sc.scrollHeight - pageH + 2 * rem())));
-      if (sc.dataset.lock === "row") {
-        y = Math.max(0, top - topPad);
-        $$(".row", sc).forEach(r => r.classList.toggle("past", r.offsetTop < anchor.offsetTop));
-      }
+      if (sc.dataset.lock === "row") y = Math.max(0, top - topPad);
+      const rows = $$(".row,.grid-row", sc), tops = rows.map(r => [r.offsetTop, r.offsetHeight]), at = anchor.offsetTop, lock = sc.dataset.lock === "row";
+      rows.forEach((r, i) => {
+        const t = tops[i][0], b = t + tops[i][1];
+        r.classList.toggle("past", lock && t < at);
+        r.classList.toggle("far", b < y - pageH * 0.6 || t > y + pageH * 1.6);
+      });
       sc._y = y;
       sc.style.transform = `translateY(${-y}px)`;
       $("#top").classList.toggle("hide", y > 2 * rem() && !!sc.dataset.hidetop);
@@ -252,11 +255,27 @@ const F = {
   visible(el) { return el.offsetParent !== null; },
   move(dir) {
     const cur = F.cur && document.contains(F.cur) ? F.cur : null;
-    const all = $$(".f", F.scope()).filter(F.visible);
-    if (!cur) { F.set(all[0]); return; }
+    let all = $$(".f", F.scope());
+    if (!cur) { F.set(all.filter(F.visible)[0]); return; }
+    if (dir === "up" || dir === "down") {
+      const seen = new Set(), g0 = cur.closest(".track");
+      all = all.filter(el => {
+        const t = el.closest(".track");
+        if (!t || t === g0) return true;
+        if (seen.has(t)) return false;
+        seen.add(t);
+        return true;
+      }).map(el => { const t = el.closest(".track"); return t && t !== cur.closest(".track") && t._last && document.contains(t._last) ? t._last : el; });
+    }
+    all = all.filter(F.visible);
     const r0 = cur.getBoundingClientRect();
     const cx = r0.left + r0.width / 2, cy = r0.top + r0.height / 2;
     const g0 = cur.closest("[data-g]");
+    if ((dir === "left" || dir === "right") && g0 && g0.classList.contains("track")) {
+      const items = $$(".f", g0), i = items.indexOf(cur), nx = items[i + (dir === "left" ? -1 : 1)];
+      if (nx) F.set(nx);
+      return;
+    }
     let best = null, bs = 1e12;
     all.forEach(el => {
       if (el === cur) return;
@@ -712,6 +731,9 @@ document.addEventListener("keydown", e => {
   if (inInput && (k === 37 || k === 39)) return;  // 输入框里左右移动光标
   if (k === 37 || k === 38 || k === 39 || k === 40) {
     e.preventDefault();
+    const now = Date.now();
+    if (e.repeat && now - (F.lastKey || 0) < 110) return;
+    F.lastKey = now;
     if (inInput) document.activeElement.blur();
     const dir = { 37: "left", 38: "up", 39: "right", 40: "down" }[k];
     const before = F.cur;

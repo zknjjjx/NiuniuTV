@@ -1,8 +1,6 @@
 package com.niuniu.tv;
 
 import android.app.Activity;
-import android.app.AlertDialog;
-import android.content.DialogInterface;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
@@ -15,6 +13,9 @@ import android.view.KeyEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
+import android.widget.LinearLayout;
+import android.widget.ListView;
+import android.graphics.Typeface;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -54,7 +55,7 @@ public class PlayerActivity extends Activity {
     private int si, ei;
     private ExoPlayer player;
     private PlayerView view;
-    private TextView info, status;
+    private TextView status;
     private final Handler h = new Handler(Looper.getMainLooper());
     private boolean started = false;
     private final List<Integer> failed = new ArrayList<>();
@@ -68,7 +69,7 @@ public class PlayerActivity extends Activity {
             }
         }
     };
-    private final Runnable hideStatus = new Runnable() { public void run() { status.setVisibility(View.GONE); } };
+    private final Runnable hideStatus = new Runnable() { public void run() { fade(status, false); } };
     private final Runnable saver = new Runnable() { public void run() { save(); h.postDelayed(this, 10000); } };
 
     @Override
@@ -89,35 +90,12 @@ public class PlayerActivity extends Activity {
         root.setBackgroundColor(Color.BLACK);
         view = new PlayerView(this);
         view.setResizeMode(AspectRatioFrameLayout.RESIZE_MODE_FIT);
-        view.setControllerShowTimeoutMs(4000);
+        view.setUseController(false);
         view.setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS);
         view.setKeepContentOnPlayerReset(true);
         root.addView(view, new FrameLayout.LayoutParams(-1, -1));
-
-        info = new TextView(this);
-        info.setTextColor(Color.WHITE);
-        info.setTextSize(TypedValue.COMPLEX_UNIT_SP, 24);
-        info.setShadowLayer(8, 0, 2, Color.BLACK);
-        info.setPadding(dp(36), dp(24), dp(36), dp(12));
-        root.addView(info, new FrameLayout.LayoutParams(-1, -2, Gravity.TOP));
-
-        status = new TextView(this);
-        status.setTextColor(Color.WHITE);
-        status.setTextSize(TypedValue.COMPLEX_UNIT_SP, 22);
-        status.setPadding(dp(18), dp(10), dp(18), dp(10));
-        GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
-                new int[]{0xE6FF5A36, 0xE6FFB547});
-        bg.setCornerRadius(dp(22));
-        status.setBackground(bg);
-        FrameLayout.LayoutParams sl = new FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
-        sl.bottomMargin = dp(90);
-        root.addView(status, sl);
-        status.setVisibility(View.GONE);
+        buildOsd(root);
         setContentView(root);
-
-        view.setControllerVisibilityListener(new PlayerView.ControllerVisibilityListener() {
-            public void onVisibilityChanged(int v) { info.setVisibility(v == View.VISIBLE ? View.VISIBLE : View.GONE); }
-        });
 
         DefaultHttpDataSource.Factory http = new DefaultHttpDataSource.Factory()
                 .setUserAgent(Net.UA).setAllowCrossProtocolRedirects(true)
@@ -160,12 +138,15 @@ public class PlayerActivity extends Activity {
         });
         player.addListener(new Player.Listener() {
             @Override
+            public void onPlayWhenReadyChanged(boolean pwr, int reason) { refreshCenter(); }
+            @Override
             public void onPlaybackStateChanged(int st) {
                 if (st == Player.STATE_READY) {
                     h.removeCallbacks(watchdog);
                     if (!started) {
                         started = true;
                         failed.clear();
+                        showOsd();
                     }
                 } else if (st == Player.STATE_BUFFERING) {
                     h.removeCallbacks(watchdog);
@@ -273,19 +254,310 @@ public class PlayerActivity extends Activity {
     }
 
     private void updateInfo() {
-        String t = data.optString("title");
+        if (tTitle == null) return;
         String ep = epName();
         int total = eps(si).length();
         JSONObject s = sources.optJSONObject(si);
         String src = s == null ? "" : s.optString("site");
-        info.setText(t + (total > 1 ? "  ·  " + ep : "") + "\n片源：" + src + "（" + (si + 1) + "/" + sources.length() + "）   ▲ 选集换源" + (decInfo().isEmpty() ? "" : "\n" + decInfo()));
+        tTitle.setText(data.optString("title"));
+        tSub.setText((total > 1 ? ep + "   ·   " : "") + src + "   ·   片源 " + (si + 1) + "/" + sources.length());
+        String d = decInfo();
+        tTech.setText(d);
+        tTech.setVisibility(d.isEmpty() ? View.GONE : View.VISIBLE);
     }
 
     private void showStatus(String msg, long ms) {
         status.setText(msg);
         status.setVisibility(View.VISIBLE);
+        status.animate().cancel();
+        status.setAlpha(1f);
         h.removeCallbacks(hideStatus);
         if (ms > 0) h.postDelayed(hideStatus, ms);
+    }
+
+    // ---------------- 自绘播放界面 ----------------
+    private static final int AC = 0xFFFF6A3D;
+    private LinearLayout top, bottom;
+    private TextView tTitle, tSub, tTech, tClock, tCur, tDur, tHint;
+    private Bar bar;
+    private PlayIcon center;
+    private boolean osdOn = false;
+    private long seekTarget = -1;
+    private FrameLayout panel;
+    private ListView plist;
+    private TextView tabEp, tabSrc;
+    private View tabLine;
+    private int tab = 0;
+
+    private final Runnable ticker = new Runnable() {
+        public void run() {
+            tick();
+            if (osdOn) h.postDelayed(this, 500);
+        }
+    };
+    private final Runnable autoHide = new Runnable() {
+        public void run() { if (player != null && player.getPlayWhenReady() && seekTarget < 0 && !panelOn()) hideOsd(); }
+    };
+
+    private TextView tv(float sp, int color, String face) {
+        TextView v = new TextView(this);
+        v.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp);
+        v.setTextColor(color);
+        v.setTypeface(Typeface.create(face, Typeface.NORMAL));
+        v.setIncludeFontPadding(false);
+        v.setShadowLayer(dp(6), 0, dp(1), 0x66000000);
+        return v;
+    }
+
+    private void buildOsd(FrameLayout root) {
+        top = new LinearLayout(this);
+        top.setOrientation(LinearLayout.VERTICAL);
+        top.setPadding(dp(56), dp(34), dp(56), dp(70));
+        top.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{0xB3000000, 0x59000000, 0x00000000}));
+        tTitle = tv(26, 0xFFFFFFFF, "sans-serif");
+        tTitle.setSingleLine(true);
+        tTitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        tSub = tv(15, 0xB3FFFFFF, "sans-serif");
+        tTech = tv(13, 0x80FFFFFF, "sans-serif-light");
+        top.addView(tTitle);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, -2);
+        lp.topMargin = dp(10);
+        top.addView(tSub, lp);
+        LinearLayout.LayoutParams lp2 = new LinearLayout.LayoutParams(-2, -2);
+        lp2.topMargin = dp(8);
+        top.addView(tTech, lp2);
+        root.addView(top, new FrameLayout.LayoutParams(-1, -2, Gravity.TOP));
+
+        tClock = tv(24, 0xE6FFFFFF, "sans-serif-light");
+        FrameLayout.LayoutParams cl = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.END);
+        cl.topMargin = dp(32); cl.rightMargin = dp(56);
+        root.addView(tClock, cl);
+
+        bottom = new LinearLayout(this);
+        bottom.setOrientation(LinearLayout.VERTICAL);
+        bottom.setPadding(dp(56), dp(80), dp(56), dp(30));
+        bottom.setBackground(new GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP, new int[]{0xCC000000, 0x66000000, 0x00000000}));
+        FrameLayout times = new FrameLayout(this);
+        tCur = tv(15, 0xFFFFFFFF, "sans-serif");
+        tDur = tv(15, 0x99FFFFFF, "sans-serif");
+        times.addView(tCur, new FrameLayout.LayoutParams(-2, -2, Gravity.START));
+        times.addView(tDur, new FrameLayout.LayoutParams(-2, -2, Gravity.END));
+        bottom.addView(times);
+        bar = new Bar(this, getResources().getDisplayMetrics().density);
+        LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(-1, dp(22));
+        bl.topMargin = dp(6);
+        bottom.addView(bar, bl);
+        tHint = tv(13, 0x73FFFFFF, "sans-serif");
+        tHint.setText("OK  暂停 / 继续        ◀ ▶  快退 / 快进        ▲  选集 · 换源        ▼  隐藏");
+        LinearLayout.LayoutParams hl = new LinearLayout.LayoutParams(-2, -2);
+        hl.topMargin = dp(8);
+        bottom.addView(tHint, hl);
+        root.addView(bottom, new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM));
+
+        center = new PlayIcon(this);
+        root.addView(center, new FrameLayout.LayoutParams(dp(84), dp(84), Gravity.CENTER));
+
+        status = tv(16, 0xF2FFFFFF, "sans-serif");
+        status.setShadowLayer(0, 0, 0, 0);
+        status.setPadding(dp(22), dp(11), dp(22), dp(11));
+        GradientDrawable sb = new GradientDrawable();
+        sb.setColor(0xE01C1D24);
+        sb.setCornerRadius(dp(24));
+        sb.setStroke(Math.max(1, dp(1)), 0x2EFFFFFF);
+        status.setBackground(sb);
+        FrameLayout.LayoutParams sl = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+        sl.topMargin = dp(40);
+        root.addView(status, sl);
+        status.setVisibility(View.GONE);
+
+        buildPanel(root);
+        top.setVisibility(View.GONE); bottom.setVisibility(View.GONE); tClock.setVisibility(View.GONE); center.setVisibility(View.GONE);
+    }
+
+    private void fade(View v, boolean on) {
+        v.animate().cancel();
+        if (on) {
+            if (v.getVisibility() != View.VISIBLE) { v.setAlpha(0f); v.setVisibility(View.VISIBLE); }
+            v.animate().alpha(1f).setDuration(180).start();
+        } else if (v.getVisibility() == View.VISIBLE) {
+            final View w = v;
+            v.animate().alpha(0f).setDuration(220).withEndAction(new Runnable() { public void run() { w.setVisibility(View.GONE); } }).start();
+        }
+    }
+
+    private void showOsd() {
+        h.removeCallbacks(autoHide);
+        if (!osdOn) {
+            osdOn = true;
+            updateInfo();
+            fade(top, true); fade(bottom, true); fade(tClock, true);
+            h.removeCallbacks(ticker);
+            h.post(ticker);
+        }
+        h.postDelayed(autoHide, 4500);
+    }
+
+    private void hideOsd() {
+        h.removeCallbacks(autoHide);
+        if (!osdOn) return;
+        osdOn = false;
+        fade(top, false); fade(bottom, false); fade(tClock, false);
+    }
+
+    private void tick() {
+        if (player == null) return;
+        long dur = player.getDuration(), pos = seekTarget >= 0 ? seekTarget : player.getCurrentPosition();
+        boolean live = dur == C.TIME_UNSET || dur <= 0;
+        tCur.setText(fmt(pos));
+        tCur.setTextColor(seekTarget >= 0 ? 0xFFFFB27A : 0xFFFFFFFF);
+        tDur.setText(live ? "直播" : fmt(dur));
+        bar.set(live ? 0 : (float) pos / dur, live ? 0 : (float) player.getBufferedPosition() / dur, seekTarget >= 0);
+        tClock.setText(new java.text.SimpleDateFormat("HH:mm", java.util.Locale.US).format(new java.util.Date()));
+    }
+
+    private void refreshCenter() {
+        boolean paused = player != null && !player.getPlayWhenReady();
+        fade(center, paused);
+        if (paused) { h.removeCallbacks(autoHide); if (!osdOn) showOsd(); h.removeCallbacks(autoHide); }
+    }
+
+    private void seekBy(boolean fwd, int repeat) {
+        long dur = player.getDuration();
+        if (seekTarget < 0) seekTarget = player.getCurrentPosition();
+        long step = repeat > 12 ? 60000 : repeat > 4 ? 30000 : 10000;
+        seekTarget += fwd ? step : -step;
+        if (seekTarget < 0) seekTarget = 0;
+        if (dur > 0 && dur != C.TIME_UNSET && seekTarget > dur - 3000) seekTarget = Math.max(0, dur - 3000);
+        showOsd();
+        tick();
+    }
+
+    private void commitSeek() {
+        if (seekTarget < 0) return;
+        player.seekTo(seekTarget);
+        seekTarget = -1;
+        tick();
+        showOsd();
+    }
+
+    // ---------------- 侧边选集 / 换源面板 ----------------
+    private boolean panelOn() { return panel != null && panel.getVisibility() == View.VISIBLE; }
+
+    private void buildPanel(FrameLayout root) {
+        panel = new FrameLayout(this);
+        panel.setBackground(new GradientDrawable(GradientDrawable.Orientation.RIGHT_LEFT, new int[]{0xF70F1015, 0xEB0F1015, 0x000F1015}));
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(36), dp(40), dp(44), dp(28));
+        LinearLayout tabs = new LinearLayout(this);
+        tabEp = tv(20, 0xFFFFFFFF, "sans-serif");
+        tabSrc = tv(20, 0x80FFFFFF, "sans-serif");
+        tabs.addView(tabEp);
+        LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(-2, -2);
+        tl.leftMargin = dp(30);
+        tabs.addView(tabSrc, tl);
+        box.addView(tabs);
+        tabLine = new View(this);
+        GradientDrawable ln = new GradientDrawable();
+        ln.setColor(AC);
+        ln.setCornerRadius(dp(2));
+        tabLine.setBackground(ln);
+        LinearLayout.LayoutParams ll = new LinearLayout.LayoutParams(dp(22), dp(3));
+        ll.topMargin = dp(9);
+        box.addView(tabLine, ll);
+        TextView tip = tv(12, 0x66FFFFFF, "sans-serif");
+        tip.setText("◀ ▶ 切换    OK 选择    返回 关闭");
+        LinearLayout.LayoutParams pl = new LinearLayout.LayoutParams(-2, -2);
+        pl.topMargin = dp(12);
+        box.addView(tip, pl);
+        plist = new ListView(this);
+        plist.setDivider(null);
+        plist.setVerticalScrollBarEnabled(false);
+        plist.setCacheColorHint(0);
+        GradientDrawable sel = new GradientDrawable();
+        sel.setColor(0x26FFFFFF);
+        sel.setCornerRadius(dp(10));
+        sel.setStroke(Math.max(1, dp(1)), 0x40FFFFFF);
+        plist.setSelector(sel);
+        plist.setDrawSelectorOnTop(false);
+        LinearLayout.LayoutParams ql = new LinearLayout.LayoutParams(-1, 0, 1f);
+        ql.topMargin = dp(16);
+        box.addView(plist, ql);
+        FrameLayout.LayoutParams bp = new FrameLayout.LayoutParams(dp(420), -1, Gravity.END);
+        panel.addView(box, bp);
+        root.addView(panel, new FrameLayout.LayoutParams(dp(560), -1, Gravity.END));
+        panel.setVisibility(View.GONE);
+        plist.setOnItemClickListener(new android.widget.AdapterView.OnItemClickListener() {
+            public void onItemClick(android.widget.AdapterView<?> p, View v, int w, long id) {
+                hidePanel();
+                if (tab == 0) { save(); ei = w; failed.clear(); load(0); }
+                else {
+                    long pos = player.getCurrentPosition();
+                    int idx = matchEp(eps(w), epName(), ei);
+                    si = w; ei = Math.max(0, idx); failed.clear(); load(pos);
+                }
+                showStatus(tab == 0 ? "播放 " + epName() : "切换到「" + sources.optJSONObject(si).optString("site") + "」", 2000);
+            }
+        });
+    }
+
+    private void showPanel(int which) {
+        tab = which;
+        fillPanel();
+        hideOsd();
+        fade(panel, true);
+        plist.requestFocus();
+    }
+
+    private void hidePanel() { fade(panel, false); }
+
+    private void fillPanel() {
+        tabEp.setTextColor(tab == 0 ? 0xFFFFFFFF : 0x80FFFFFF);
+        tabSrc.setTextColor(tab == 1 ? 0xFFFFFFFF : 0x80FFFFFF);
+        JSONArray a = eps(si);
+        tabEp.setText("选集  " + (a == null ? 0 : a.length()));
+        tabSrc.setText("片源  " + sources.length());
+        LinearLayout.LayoutParams ll = (LinearLayout.LayoutParams) tabLine.getLayoutParams();
+        tabEp.measure(0, 0);
+        ll.leftMargin = tab == 0 ? 0 : tabEp.getMeasuredWidth() + dp(30);
+        tabLine.setLayoutParams(ll);
+        final int n = tab == 0 ? (a == null ? 0 : a.length()) : sources.length();
+        final int cur = tab == 0 ? ei : si;
+        plist.setAdapter(new android.widget.BaseAdapter() {
+            public int getCount() { return n; }
+            public Object getItem(int i) { return i; }
+            public long getItemId(int i) { return i; }
+            public View getView(int i, View cv, android.view.ViewGroup pg) {
+                LinearLayout row = cv instanceof LinearLayout ? (LinearLayout) cv : null;
+                TextView l, r;
+                if (row == null) {
+                    row = new LinearLayout(PlayerActivity.this);
+                    row.setPadding(dp(18), dp(13), dp(18), dp(13));
+                    row.setGravity(Gravity.CENTER_VERTICAL);
+                    l = tv(17, 0xFFFFFFFF, "sans-serif"); l.setShadowLayer(0, 0, 0, 0);
+                    l.setSingleLine(true); l.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                    r = tv(13, 0x80FFFFFF, "sans-serif"); r.setShadowLayer(0, 0, 0, 0);
+                    row.addView(l, new LinearLayout.LayoutParams(0, -2, 1f));
+                    row.addView(r, new LinearLayout.LayoutParams(-2, -2));
+                } else { l = (TextView) row.getChildAt(0); r = (TextView) row.getChildAt(1); }
+                String left, right = "";
+                if (tab == 0) left = eps(si).optJSONObject(i).optString("name");
+                else {
+                    JSONObject s = sources.optJSONObject(i);
+                    long bps = s.optLong("bps", 0);
+                    left = s.optString("site");
+                    JSONArray e = s.optJSONArray("eps");
+                    right = (e == null ? 0 : e.length()) + " 集" + (bps > 0 ? String.format(java.util.Locale.US, "  ·  %.1f MB/s", bps / 1048576.0) : bps < 0 ? "  ·  不通" : "");
+                }
+                if (i == cur) right = "正在播放";
+                l.setText(left);
+                l.setTextColor(i == cur ? 0xFFFFA477 : 0xE6FFFFFF);
+                r.setText(right);
+                r.setTextColor(i == cur ? 0xCCFFA477 : 0x80FFFFFF);
+                return row;
+            }
+        });
+        plist.setSelection(Math.max(0, cur));
     }
 
     /** 当前源不行 → 同一集换下一个源，保留进度 */
@@ -307,7 +579,7 @@ public class PlayerActivity extends Activity {
             load(pos);
             return;
         }
-        showStatus("所有片源都试过了，播放失败。按 ▲ 手动选源", 0);
+        showStatus("所有片源都试过了，按 ▲ 手动选源", 0);
         failed.clear();
     }
 
@@ -364,90 +636,87 @@ public class PlayerActivity extends Activity {
         } catch (Exception ignored) {}
     }
 
-    private void showPicker() {
-        final JSONArray a = eps(si);
-        String[] opts = new String[]{"选集（共 " + (a == null ? 0 : a.length()) + " 集）", "换片源（共 " + sources.length() + " 个）"};
-        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                .setItems(opts, new DialogInterface.OnClickListener() {
-                    public void onClick(DialogInterface d, int w) { if (w == 0) pickEpisode(); else pickSource(); }
-                }).show();
-    }
-
-    private void pickEpisode() {
-        final JSONArray a = eps(si);
-        if (a == null) return;
-        String[] items = new String[a.length()];
-        for (int i = 0; i < items.length; i++) items[i] = (i == ei ? "▶ " : "    ") + a.optJSONObject(i).optString("name");
-        AlertDialog d = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                .setTitle(data.optString("title"))
-                .setItems(items, new DialogInterface.OnClickListener() {
-                    public void onClick(DialogInterface dd, int w) { save(); ei = w; failed.clear(); load(0); }
-                }).create();
-        d.show();
-        d.getListView().setSelection(Math.max(0, ei - 3));
-    }
-
-    private void pickSource() {
-        String[] items = new String[sources.length()];
-        for (int i = 0; i < items.length; i++) {
-            JSONObject s = sources.optJSONObject(i);
-            long bps = s.optLong("bps", 0);
-            String sp = bps > 0 ? String.format(java.util.Locale.US, "  %.1f MB/s", bps / 1048576.0) : bps < 0 ? "  不通" : "";
-            items[i] = (i == si ? "▶ " : "    ") + s.optString("site") + "  ·  " + s.optJSONArray("eps").length() + " 集" + sp;
-        }
-        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                .setTitle("换片源（按测速从快到慢）")
-                .setItems(items, new DialogInterface.OnClickListener() {
-                    public void onClick(DialogInterface d, int w) {
-                        long pos = player.getCurrentPosition();
-                        String name = epName();
-                        int idx = matchEp(eps(w), name, ei);
-                        si = w;
-                        ei = Math.max(0, idx);
-                        failed.clear();
-                        load(pos);
-                    }
-                }).show();
-    }
-
     @Override
     public boolean dispatchKeyEvent(KeyEvent e) {
         int k = e.getKeyCode();
         boolean down = e.getAction() == KeyEvent.ACTION_DOWN;
+        if (panelOn()) {
+            if (k == KeyEvent.KEYCODE_BACK || k == KeyEvent.KEYCODE_MENU) { if (!down) hidePanel(); return true; }
+            if (k == KeyEvent.KEYCODE_DPAD_LEFT || k == KeyEvent.KEYCODE_DPAD_RIGHT) {
+                if (down && e.getRepeatCount() == 0) { tab = k == KeyEvent.KEYCODE_DPAD_LEFT ? 0 : 1; fillPanel(); }
+                return true;
+            }
+            return super.dispatchKeyEvent(e);
+        }
         if (k == KeyEvent.KEYCODE_BACK) {
             if (down) return true;
-            if (view.isControllerFullyVisible()) { view.hideController(); return true; }
+            if (seekTarget >= 0) { seekTarget = -1; tick(); return true; }
+            if (osdOn) { hideOsd(); return true; }
             save();
             finish();
             return true;
         }
-        if (k == KeyEvent.KEYCODE_MENU || (k == KeyEvent.KEYCODE_DPAD_UP && !view.isControllerFullyVisible())) {
-            if (!down) showPicker();
+        if (k == KeyEvent.KEYCODE_MENU || k == KeyEvent.KEYCODE_DPAD_UP) {
+            if (!down) showPanel(0);
             return true;
         }
-        if (!view.isControllerFullyVisible()) {
-            if (k == KeyEvent.KEYCODE_DPAD_LEFT || k == KeyEvent.KEYCODE_DPAD_RIGHT) {
-                if (down) {
-                    long step = e.getRepeatCount() > 6 ? 60000 : e.getRepeatCount() > 2 ? 30000 : 10000;
-                    long p = player.getCurrentPosition() + (k == KeyEvent.KEYCODE_DPAD_LEFT ? -step : step);
-                    player.seekTo(Math.max(0, p));
-                    showStatus((k == KeyEvent.KEYCODE_DPAD_LEFT ? "◀◀ " : "▶▶ ") + fmt(Math.max(0, p)) + " / " + fmt(player.getDuration()), 1500);
-                }
-                return true;
+        if (k == KeyEvent.KEYCODE_DPAD_LEFT || k == KeyEvent.KEYCODE_DPAD_RIGHT
+                || k == KeyEvent.KEYCODE_MEDIA_REWIND || k == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD) {
+            boolean fwd = k == KeyEvent.KEYCODE_DPAD_RIGHT || k == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD;
+            if (down) seekBy(fwd, e.getRepeatCount()); else commitSeek();
+            return true;
+        }
+        if (k == KeyEvent.KEYCODE_DPAD_CENTER || k == KeyEvent.KEYCODE_ENTER || k == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
+                || k == KeyEvent.KEYCODE_MEDIA_PLAY || k == KeyEvent.KEYCODE_MEDIA_PAUSE) {
+            if (!down) {
+                if (seekTarget >= 0) { commitSeek(); return true; }
+                boolean play = k == KeyEvent.KEYCODE_MEDIA_PLAY || (k != KeyEvent.KEYCODE_MEDIA_PAUSE && !player.getPlayWhenReady());
+                player.setPlayWhenReady(play);
+                showOsd();
+                refreshCenter();
             }
-            if (k == KeyEvent.KEYCODE_DPAD_CENTER || k == KeyEvent.KEYCODE_ENTER || k == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) {
-                if (!down) {
-                    player.setPlayWhenReady(!player.getPlayWhenReady());
-                    view.showController();
-                }
-                return true;
-            }
-            if (k == KeyEvent.KEYCODE_DPAD_DOWN) {
-                if (!down) view.showController();
-                return true;
-            }
+            return true;
+        }
+        if (k == KeyEvent.KEYCODE_DPAD_DOWN || k == KeyEvent.KEYCODE_INFO) {
+            if (!down) { if (osdOn && player.getPlayWhenReady()) hideOsd(); else showOsd(); }
+            return true;
         }
         return super.dispatchKeyEvent(e);
+    }
+
+    /** 细进度条：轨道 / 已缓冲 / 已播放 / 圆点 */
+    static class Bar extends View {
+        final float d; float pos, buf; boolean seeking;
+        final android.graphics.Paint p = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        final android.graphics.RectF r = new android.graphics.RectF();
+        Bar(android.content.Context c, float density) { super(c); d = density; }
+        void set(float pos, float buf, boolean seeking) {
+            this.pos = Math.max(0, Math.min(1, pos)); this.buf = Math.max(0, Math.min(1, buf)); this.seeking = seeking; invalidate();
+        }
+        @Override protected void onDraw(android.graphics.Canvas c) {
+            float w = getWidth(), cy = getHeight() / 2f, th = (seeking ? 5 : 3.5f) * d, kr = (seeking ? 8 : 6) * d;
+            float x0 = kr, x1 = w - kr, len = x1 - x0;
+            p.setColor(0x33FFFFFF); r.set(x0, cy - th / 2, x1, cy + th / 2); c.drawRoundRect(r, th, th, p);
+            p.setColor(0x55FFFFFF); r.set(x0, cy - th / 2, x0 + len * buf, cy + th / 2); c.drawRoundRect(r, th, th, p);
+            p.setColor(AC); r.set(x0, cy - th / 2, x0 + len * pos, cy + th / 2); c.drawRoundRect(r, th, th, p);
+            p.setColor(0xFFFFFFFF); c.drawCircle(x0 + len * pos, cy, kr, p);
+        }
+    }
+
+    /** 暂停时画面中央的播放符号 */
+    static class PlayIcon extends View {
+        final android.graphics.Paint p = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        final android.graphics.Path tri = new android.graphics.Path();
+        PlayIcon(android.content.Context c) { super(c); }
+        @Override protected void onDraw(android.graphics.Canvas c) {
+            float w = getWidth(), cx = w / 2, cy = getHeight() / 2, R = w / 2 - 2;
+            p.setStyle(android.graphics.Paint.Style.FILL); p.setColor(0x66000000); c.drawCircle(cx, cy, R, p);
+            p.setStyle(android.graphics.Paint.Style.STROKE); p.setStrokeWidth(Math.max(1.5f, w / 60)); p.setColor(0x4DFFFFFF); c.drawCircle(cx, cy, R, p);
+            float s = R * 0.42f;
+            tri.reset(); tri.moveTo(cx - s * 0.6f, cy - s); tri.lineTo(cx + s, cy); tri.lineTo(cx - s * 0.6f, cy + s); tri.close();
+            p.setStyle(android.graphics.Paint.Style.FILL); p.setColor(0xF2FFFFFF);
+            p.setPathEffect(new android.graphics.CornerPathEffect(s * 0.18f)); c.drawPath(tri, p); p.setPathEffect(null);
+        }
     }
 
     private static String fmt(long ms) {
@@ -475,6 +744,7 @@ public class PlayerActivity extends Activity {
     @Override
     protected void onDestroy() {
         h.removeCallbacksAndMessages(null);
+        if (panel != null) panel.animate().cancel();
         if (player != null) { player.release(); player = null; }
         super.onDestroy();
     }

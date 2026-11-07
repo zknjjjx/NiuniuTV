@@ -214,3 +214,26 @@ body:not(.poster) #bg .aur{background:radial-gradient(42% 34% at 16% 14%,rgba(25
 .card.focus .t{font-weight:400;color:#fff}
 .chip.focus,.tab.focus{transform:none}
 .skel{animation:none}
+
+/* 2.5：流畅度与精细化 */
+#bg{will-change:transform}
+.scroll{transition:transform .3s cubic-bezier(.22,.7,.2,1)}
+.track{transition:transform .26s cubic-bezier(.22,.7,.2,1)}
+.row{transition:none}
+.row.past,.row.far{visibility:hidden}
+.row.past{opacity:1}
+.tab,.chip,.btn,.ep,.setrow,.sbox,.person,.card .t{transition:none}
+.btn.focus,.ep.focus,.person.focus,.setrow.focus{transform:none}
+.card .sub{text-shadow:0 1px 2px rgba(0,0,0,.8)}
+.hero h1,.dt h1,.pagehead h2{font-weight:500}
+.brand b{font-weight:500}
+#clock{font-weight:300}
+.person b{font-weight:400}
+.meta .rate,.card .badge{font-weight:500}
+.row h3{font-weight:400;letter-spacing:.02em}
+.row h3:before{width:.22rem;height:1.05rem}
+#toast{color:rgba(255,255,255,.95);font-weight:400;font-size:1.2rem;background:rgba(26,27,34,.92);border:1px solid rgba(255,255,255,.16);box-shadow:0 .6rem 2rem rgba(0,0,0,.45);bottom:auto;top:2.6rem;transform:translate(-50%,-1rem);padding:.75rem 1.6rem}
+#toast.on{transform:translate(-50%,0)}
+.chip.focus,.btn.focus,.ep.focus,.tab.focus{box-shadow:inset 0 1px 0 rgba(255,255,255,.5)}
+.panel{-webkit-backdrop-filter:none;backdrop-filter:none}
+#top.solid:before{-webkit-backdrop-filter:none;backdrop-filter:none}
