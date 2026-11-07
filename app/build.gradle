@@ -8,8 +8,8 @@ android {
         applicationId 'com.niuniu.tv2'
         minSdk 21
         targetSdk 30
-        versionCode 37
-        versionName '2.7.8'
+        versionCode 38
+        versionName '2.7.9'
     }
     signingConfigs {
         niuniu {
