@@ -15,6 +15,13 @@ PORT = int(os.environ.get("NN_PORT", "38990"))   # 固定端口，收藏与观�
 URL = f"http://127.0.0.1:{PORT}/"
 
 
+# 无控制台的 exe 没有 stdout/stderr：输出写到日志，方便排查
+if sys.stdout is None or sys.stderr is None:
+    _f = open(os.path.join(DATA, "niuniu.log"), "a", encoding="utf-8", buffering=1)
+    sys.stdout = sys.stdout or _f
+    sys.stderr = sys.stderr or _f
+
+
 def log(*a):
     try:
         with open(os.path.join(DATA, "niuniu.log"), "a", encoding="utf-8") as f:

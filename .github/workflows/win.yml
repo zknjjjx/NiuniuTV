@@ -34,6 +34,7 @@ jobs:
           sleep 10; curl -sf http://127.0.0.1:38990/api/sites | head -c 300; echo
           (pip install -q playwright && python -m playwright install chromium && python shot.py) || echo "截图失败"
           ls shots || true
+          echo "== 数据目录 =="; ls -la "$APPDATA/NiuniuWin" || true; cat "$APPDATA/NiuniuWin/status.json" || true; tail -40 "$APPDATA/NiuniuWin/niuniu.log" || true
       - uses: actions/upload-artifact@v4
         with:
           name: win
