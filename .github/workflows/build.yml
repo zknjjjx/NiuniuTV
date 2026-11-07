@@ -2,6 +2,7 @@ name: 妞妞影视 v2
 on:
   push:
     branches: [v2]
+    paths-ignore: ["win/**", ".github/workflows/win.yml"]
   workflow_dispatch:
 permissions:
   contents: write
@@ -65,5 +66,6 @@ jobs:
         run: |
           keep=" $(cd out && echo *.apk) latest.json latest-m.json "
           gh api repos/${{ github.repository }}/releases/tags/v2-latest --jq '.assets[] | "\(.id) \(.name)"' | while read id name; do
+            case "$name" in NiuniuWin-*) continue;; esac
             case "$keep" in *" $name "*) ;; *) echo "删除 $name"; gh api -X DELETE repos/${{ github.repository }}/releases/assets/$id ;; esac
           done

@@ -1,0 +1,50 @@
+name: 妞妞影视 Windows
+on:
+  push:
+    branches: [v2]
+    paths: ["win/**", ".github/workflows/win.yml"]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: nn-win
+  cancel-in-progress: true
+jobs:
+  exe:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults: { run: { shell: bash, working-directory: win } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -r requirements.txt
+      - name: 打包
+        run: |
+          V=$(cat VERSION | tr -d '\r\n'); echo "V=$V" >> $GITHUB_ENV
+          pyinstaller --noconfirm --onefile --windowed --name "NiuniuWin-$V" --icon niuniu.ico \
+            --add-data "cinenest;cinenest" --paths cinenest \
+            --hidden-import app --hidden-import collector --hidden-import conf --hidden-import vprobe main.py
+          ls -la dist
+      - name: 冒烟测试与截图（启动 exe，检查内置服务）
+        run: |
+          ./dist/NiuniuWin-$V.exe &
+          for i in $(seq 1 45); do curl -sf http://127.0.0.1:38990/ | grep -q "妞妞影视" && break; sleep 2; done
+          curl -sf http://127.0.0.1:38990/ | grep -o "<title>[^<]*"
+          sleep 10; curl -sf http://127.0.0.1:38990/api/sites | head -c 300; echo
+          (pip install -q playwright && python -m playwright install chromium && python shot.py) || echo "截图失败"
+          ls shots || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: win
+          path: |
+            win/shots/
+            win/dist/*.exe
+      - name: 发布到 v2-latest
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          taskkill //F //IM "NiuniuWin-$V.exe" || true
+          gh release upload v2-latest "dist/NiuniuWin-$V.exe" --clobber -R ${{ github.repository }}
+          gh api repos/${{ github.repository }}/releases/tags/v2-latest --jq '.assets[] | "\(.id) \(.name)"' | while read id name; do
+            case "$name" in NiuniuWin-*.exe) [ "$name" != "NiuniuWin-$V.exe" ] && echo "删除 $name" && gh api -X DELETE repos/${{ github.repository }}/releases/assets/$id ;; esac
+          done
