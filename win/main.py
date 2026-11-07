@@ -104,6 +104,36 @@ class Api:
             self._win.toggle_fullscreen()
 
 
+def dark_titlebar(win):
+    """把 Windows 标题栏染成和页面一样的深色（Win11 可指定颜色，Win10 用系统暗色）。"""
+    try:
+        import ctypes
+        from ctypes import wintypes
+        u32, dwm = ctypes.windll.user32, ctypes.windll.dwmapi
+        hwnd = 0
+        try:
+            hwnd = int(win.native.Handle.ToInt64())
+        except Exception:
+            pass
+        if not hwnd:
+            hwnd = u32.FindWindowW(None, win.title)
+        if not hwnd:
+            log("标题栏：找不到窗口"); return
+
+        def put(attr, val):
+            v = ctypes.c_int(val)
+            return dwm.DwmSetWindowAttribute(wintypes.HWND(hwnd), attr, ctypes.byref(v), ctypes.sizeof(v))
+        if put(20, 1) != 0:          # DWMWA_USE_IMMERSIVE_DARK_MODE
+            put(19, 1)               # Win10 1809~1909 的旧编号
+        put(35, 0x00100C0B)          # 标题栏颜色 #0b0c10（COLORREF 为 BGR，Win11）
+        put(34, 0x00100C0B)          # 边框同色
+        put(36, 0x00D8DCE4)          # 标题文字浅灰
+        # 让 Win10 立即重绘标题栏
+        u32.SetWindowPos(wintypes.HWND(hwnd), None, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0004 | 0x0010 | 0x0020)
+    except Exception as e:
+        log("标题栏染色失败", repr(e))
+
+
 # 网页里的播放器全屏 → 整个窗口全屏
 FS_JS = """
 if (!window.__nnfs) { window.__nnfs = 1;
@@ -134,6 +164,7 @@ def main():
                                 background_color="#0b0c10", js_api=api, text_select=False)
     api._win = win
     win.events.loaded += lambda: win.evaluate_js(FS_JS)
+    win.events.shown += lambda: dark_titlebar(win)
     webview.start(gui="edgechromium", private_mode=False, storage_path=os.path.join(DATA, "webview"))
     os._exit(0)
 
