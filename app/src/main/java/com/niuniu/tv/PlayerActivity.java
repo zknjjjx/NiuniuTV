@@ -575,22 +575,6 @@ public class PlayerActivity extends Activity {
         showOsd();
     }
 
-    private void exitKeys() {
-        keySel = -1;
-        if (keys != null) keys.setVisibility(View.GONE);
-    }
-
-    private void jumpEp(int to) {
-        if (to < 0 || to >= epCount() || to == ei) return;
-        save();
-        ei = to;
-        failed.clear();
-        showStatus("播放 " + epName(), 2000);
-        load(0);
-        paintKeys();
-        showOsd();
-    }
-
     private void hideOsd() {
         h.removeCallbacks(autoHide);
         exitKeys();
