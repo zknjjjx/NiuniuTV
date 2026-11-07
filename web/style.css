@@ -425,9 +425,9 @@ body.mob{-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:t
 .mob #toast{top:auto;bottom:2.4rem;font-size:.95rem;max-width:88%;text-align:center}
 
 /* 启动：狗狗居中（与原生启动图同位同大 144px）→ 飞到左上角 logo，底色淡出露出界面，“影视”随后滑入 */
-#splash{position:fixed;left:0;top:0;right:0;bottom:0;z-index:999;background:rgba(11,12,16,1);-webkit-transition:background-color .55s ease .3s;transition:background-color .55s ease .3s;pointer-events:none}
+#splash{position:fixed;left:0;top:0;right:0;bottom:0;z-index:999;background:rgba(11,12,16,1);pointer-events:none}
 #splash img{position:absolute;left:50%;top:50%;width:144px;height:144px;margin:-72px 0 0 -72px;-webkit-transform-origin:50% 50%;transform-origin:50% 50%;-webkit-transition:-webkit-transform .8s cubic-bezier(.65,0,.25,1);transition:transform .8s cubic-bezier(.65,0,.25,1);will-change:transform}
-#splash.go{background:rgba(11,12,16,0)}
+#splash.go{background:rgba(11,12,16,0);-webkit-transition:background-color .55s ease .3s;transition:background-color .55s ease .3s}
 .nosplash #splash{display:none}
 /* App 里狗狗图片解码前：网页整体透明，直接露出原生启动图（同一只狗、同一位置），不闪 */
 html.splash0,html.splash0 body,html.splash0 #splash{background:transparent}
