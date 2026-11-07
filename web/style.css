@@ -272,3 +272,7 @@ body:not(.poster) #bg .aur{background:radial-gradient(42% 34% at 16% 14%,rgba(25
 .grid>.card{width:calc((100% - 6.5rem) / 6);margin:0 1.3rem 1.8rem 0}
 .grid>.card:nth-child(6n){margin-right:0}
 .grid>.card .pic{width:100%;height:0;padding-top:142%}
+
+.epcol{padding-right:2.6rem;padding-left:1.6rem}
+.epcol .ep{width:calc((100% - 1.2rem) / 3);margin:0 .6rem .6rem 0}
+.epcol .ep:nth-child(3n){margin-right:0}
