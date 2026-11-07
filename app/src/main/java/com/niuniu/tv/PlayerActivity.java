@@ -135,7 +135,11 @@ public class PlayerActivity extends Activity {
                 updateInfo();
             }
             @Override
-            public void onDroppedVideoFrames(@NonNull EventTime t, int n, long ms) { dropped += n; updateInfo(); }
+            public void onDroppedVideoFrames(@NonNull EventTime t, int n, long ms) {
+                // 起播、缓冲恢复、快进后 3 秒内解码器追帧掉的不算，只统计正常播放时的掉帧
+                if (android.os.SystemClock.uptimeMillis() < dropQuiet) return;
+                dropped += n; updateInfo();
+            }
         });
         player.addListener(new Player.Listener() {
             @Override
@@ -144,6 +148,7 @@ public class PlayerActivity extends Activity {
             public void onPlaybackStateChanged(int st) {
                 if (st == Player.STATE_READY) {
                     h.removeCallbacks(watchdog);
+                    dropQuiet = android.os.SystemClock.uptimeMillis() + 3000;
                     if (!started) {
                         started = true;
                         failed.clear();
@@ -209,6 +214,7 @@ public class PlayerActivity extends Activity {
 
     private String decName = "", vFmt = "";
     private int dropped = 0;
+    private long dropQuiet = 0;
 
     /** 让电视刷新率跟片源帧率对齐（25fps→50Hz、24→24/48Hz），消除 25 帧片在 60Hz 上的抖动 */
     private void matchRefresh(float fps, int vw, int vh) {

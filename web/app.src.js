@@ -300,6 +300,14 @@ const F = {
       if (nx) { F.set(nx); return; }
       if (!document.querySelector(".epcol")) return;
     }
+    // 详情页：选集栏 ←→ 播放/完整简介，固定落点，不按几何乱跳
+    if ((dir === "left" || dir === "right") && $(".epcol") && $("#epsSec").style.display !== "none") {
+      const acts = $(".dtwrap .acts"), eps = $(".epcol .eps");
+      if (dir === "left" && cur.closest(".epcol")) { F.set((acts._last && document.contains(acts._last)) ? acts._last : $("#bPlay")); return; }
+      if (dir === "right" && cur.closest(".dtwrap") && !$$(".f", g0 || document).some(x => x !== cur && x.getBoundingClientRect().left > r0.right - 2 && Math.abs(x.getBoundingClientRect().top - r0.top) < r0.height)) {
+        F.set((eps._last && document.contains(eps._last)) ? eps._last : ($(".ep.cur", eps) || $(".ep", eps))); return;
+      }
+    }
     let best = null, bs = 1e12;
     all.forEach(el => {
       if (el === cur) return;
@@ -490,7 +498,7 @@ const PAGES = {
       ${HOME_ROWS.map((r, i) => rowHTML("row" + i, r[0], skel(8))).join("")}</div>`;
     bindCards($("#page"));
     let focused = false;
-    const focusFirst = () => { if (focused || tok !== routeTok) return; focused = true; if (restore && restore.focus && document.contains(restore.focus)) F.set(restore.focus); else F.set($("#page .card.f")); };
+    const focusFirst = () => { if (focused || tok !== routeTok) return; focused = true; if (bootFocus) { bootFocus = false; F.set($('#tabs .tab[data-k="home"]'), true); return; } if (restore && restore.focus && document.contains(restore.focus)) F.set(restore.focus); else F.set($("#page .card.f")); };
     const loadRow = i => {
       const r = HOME_ROWS[i];
       return dbList(r[1], r[2], r[3], 0, 24).then(d => {
@@ -525,7 +533,7 @@ const PAGES = {
         bindCards(grid, el => { const items = $$(".card", grid); if (items.indexOf(el) > items.length - 15) load(); });
         start += d.items.length;
         end = !d.items.length || (d.total && start >= d.total);
-        $("#cnt").textContent = d.total ? `共 ${d.total} 部` : "";
+        $("#cnt").textContent = "";
         if (first && !d.items.length) grid.innerHTML = `<div class="empty">暂无内容</div>`;
       } catch (e) { if (first) grid.innerHTML = `<div class="empty">豆瓣数据加载失败</div>`; }
       busy = false;
@@ -712,7 +720,7 @@ const PAGES = {
         if (isLetters(v)) { try { items = await iqSuggest(v); iq = items.length > 0; } catch (e) {} }
         if (!items.length) items = (await dbSearch(v)).map(it => Object.assign(it, { sub: String(it.sub).split(" / ")[0] }));
         if (tok !== routeTok || me !== my) return;
-        $("#ss").textContent = items.length ? `${items.length} 部` : "";
+        $("#ss").textContent = "";
         $("#sres").innerHTML = items.length ? grid(items) : `<div class="empty">没搜到「${esc(v)}」</div>`;
         bindCards($("#sres"));
         if (iq) bindIq(items);
@@ -842,8 +850,10 @@ function boot() {
   clock(); setInterval(clock, 20000);
   loadSources();
   route = { name: "home" };
+  bootFocus = true;
   render("home");
 }
+let bootFocus = false;
 if (!String.prototype.padStart) String.prototype.padStart = function (n, c) { let s = String(this); while (s.length < n) s = c + s; return s; };
 if (!Array.prototype.find) Array.prototype.find = function (f) { for (let i = 0; i < this.length; i++) if (f(this[i], i)) return this[i]; };
 if (!Element.prototype.closest) Element.prototype.closest = function (s) { let el = this; while (el && el.nodeType === 1) { if (el.matches ? el.matches(s) : el.webkitMatchesSelector(s)) return el; el = el.parentElement; } return null; };

@@ -46,7 +46,8 @@ async def main():
         await pg.goto((ROOT / "index.html").as_uri())
         await pg.wait_for_timeout(9000)
         await pg.screenshot(path=OUT / "1-home.png")
-        for k in ["ArrowRight", "ArrowRight", "ArrowDown"]:
+        logs.append("STARTFOCUS: " + await pg.evaluate("F.cur && F.cur.textContent"))
+        for k in ["ArrowDown", "ArrowRight", "ArrowRight", "ArrowDown"]:
             await pg.keyboard.press(k); await pg.wait_for_timeout(500)
         await pg.wait_for_timeout(2500)
         await pg.screenshot(path=OUT / "2-home-row2.png")
@@ -57,6 +58,11 @@ async def main():
         logs.append("EPFOCUS: " + await pg.evaluate("F.cur && F.cur.className + ' ' + F.cur.textContent"))
         await pg.wait_for_timeout(1500)
         await pg.screenshot(path=OUT / "4-detail-down.png")
+        await pg.keyboard.press("ArrowLeft"); await pg.wait_for_timeout(400)
+        logs.append("EP-LEFT: " + await pg.evaluate("F.cur && F.cur.textContent"))
+        await pg.keyboard.press("ArrowRight"); await pg.wait_for_timeout(400)
+        await pg.keyboard.press("ArrowRight"); await pg.wait_for_timeout(400)
+        logs.append("BTN-RIGHT: " + await pg.evaluate("F.cur && F.cur.textContent"))
         await pg.evaluate("F.set(document.getElementById('bPlay'))")
         await pg.keyboard.press("Enter"); await pg.wait_for_timeout(1200)
         await pg.screenshot(path=OUT / "5-picking.png")

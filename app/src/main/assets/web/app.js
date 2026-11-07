@@ -452,6 +452,17 @@ const F = {
       }
       if (!document.querySelector(".epcol")) return;
     }
+    if ((dir === "left" || dir === "right") && $(".epcol") && $("#epsSec").style.display !== "none") {
+      const acts = $(".dtwrap .acts"), eps = $(".epcol .eps");
+      if (dir === "left" && cur.closest(".epcol")) {
+        F.set(acts._last && document.contains(acts._last) ? acts._last : $("#bPlay"));
+        return;
+      }
+      if (dir === "right" && cur.closest(".dtwrap") && !$$(".f", g0 || document).some((x) => x !== cur && x.getBoundingClientRect().left > r0.right - 2 && Math.abs(x.getBoundingClientRect().top - r0.top) < r0.height)) {
+        F.set(eps._last && document.contains(eps._last) ? eps._last : $(".ep.cur", eps) || $(".ep", eps));
+        return;
+      }
+    }
     let best = null, bs = 1e12;
     all.forEach((el) => {
       if (el === cur) return;
@@ -753,6 +764,11 @@ const PAGES = {
     const focusFirst = () => {
       if (focused || tok !== routeTok) return;
       focused = true;
+      if (bootFocus) {
+        bootFocus = false;
+        F.set($('#tabs .tab[data-k="home"]'), true);
+        return;
+      }
       if (restore && restore.focus && document.contains(restore.focus)) F.set(restore.focus);
       else F.set($("#page .card.f"));
     };
@@ -797,7 +813,7 @@ const PAGES = {
         });
         start += d.items.length;
         end = !d.items.length || d.total && start >= d.total;
-        $("#cnt").textContent = d.total ? `\u5171 ${d.total} \u90E8` : "";
+        $("#cnt").textContent = "";
         if (first && !d.items.length) grid.innerHTML = `<div class="empty">\u6682\u65E0\u5185\u5BB9</div>`;
       } catch (e) {
         if (first) grid.innerHTML = `<div class="empty">\u8C46\u74E3\u6570\u636E\u52A0\u8F7D\u5931\u8D25</div>`;
@@ -1070,7 +1086,7 @@ const PAGES = {
         }
         if (!items.length) items = (yield dbSearch(v)).map((it) => Object.assign(it, { sub: String(it.sub).split(" / ")[0] }));
         if (tok !== routeTok || me !== my) return;
-        $("#ss").textContent = items.length ? `${items.length} \u90E8` : "";
+        $("#ss").textContent = "";
         $("#sres").innerHTML = items.length ? grid(items) : `<div class="empty">\u6CA1\u641C\u5230\u300C${esc(v)}\u300D</div>`;
         bindCards($("#sres"));
         if (iq) bindIq(items);
@@ -1277,8 +1293,10 @@ function boot() {
   setInterval(clock, 2e4);
   loadSources();
   route = { name: "home" };
+  bootFocus = true;
   render("home");
 }
+let bootFocus = false;
 if (!String.prototype.padStart) String.prototype.padStart = function(n, c) {
   let s = String(this);
   while (s.length < n) s = c + s;
