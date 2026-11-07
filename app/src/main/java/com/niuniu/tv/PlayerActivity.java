@@ -293,9 +293,13 @@ public class PlayerActivity extends Activity {
     private boolean okDown = false;
     private long seekTarget = -1, seekHold = 0, seekLast = 0;
     private FrameLayout panel;
-    private LinearLayout keys;
-    private TextView kPrev, kNext;
-    private int keySel = -1;   // -1 未进入快捷键；0 上一集；1 下一集
+    // 遥控器按 ▼ 出现的底部快捷栏：暂停 / 从头播放 / 上一集 / 下一集 / 换源
+    private static final int K_PLAY = 0, K_HEAD = 1, K_PREV = 2, K_NEXT = 3, K_SRC = 4;
+    private LinearLayout keys, srcRow;
+    private android.widget.HorizontalScrollView srcScroll;
+    private final TextView[] kb = new TextView[5];
+    private int keySel = -1;   // -1 未进入快捷栏
+    private int srcSel = -1;   // >=0 正在选片源（0=自动选择，i+1=第 i 个源）
     private ListView plist;
     private TextView tabEp, tabSrc;
     private View tabLine;
@@ -360,18 +364,24 @@ public class PlayerActivity extends Activity {
         bl.topMargin = dp(6);
         bottom.addView(bar, bl);
         tHint = tv(13, 0x73FFFFFF, "sans-serif");
-        tHint.setText("OK  暂停 / 继续        ◀ ▶  快退 / 快进        ▲  选集 · 换源        ▼  上一集 / 下一集");
-        // 遥控器按 ▼ 出现的快捷键：上一集 / 下一集
+        tHint.setText("OK  暂停 / 继续        ◀ ▶  快退 / 快进        ▲  选集        ▼  暂停 · 从头 · 上下集 · 换源");
+        // 片源一行（选「换源」后出现在快捷栏上方，可横向滚动）
+        srcScroll = new android.widget.HorizontalScrollView(this);
+        srcScroll.setHorizontalScrollBarEnabled(false);
+        srcScroll.setFocusable(false);
+        srcRow = new LinearLayout(this);
+        srcRow.setGravity(Gravity.CENTER_VERTICAL);
+        srcScroll.addView(srcRow);
+        LinearLayout.LayoutParams spl = new LinearLayout.LayoutParams(-1, -2);
+        spl.topMargin = dp(12);
+        bottom.addView(srcScroll, spl);
+        srcScroll.setVisibility(View.GONE);
         keys = new LinearLayout(this);
         keys.setGravity(Gravity.CENTER_VERTICAL);
-        kPrev = tv(15, 0xF2FFFFFF, "sans-serif"); kPrev.setText("上一集");
-        kNext = tv(15, 0xF2FFFFFF, "sans-serif"); kNext.setText("下一集");
-        for (TextView t : new TextView[]{kPrev, kNext}) {
-            t.setShadowLayer(0, 0, 0, 0);
-            t.setPadding(dp(20), dp(8), dp(20), dp(8));
-            LinearLayout.LayoutParams kl = new LinearLayout.LayoutParams(-2, -2);
-            kl.rightMargin = dp(12);
-            keys.addView(t, kl);
+        String[] names = {"暂停", "从头播放", "上一集", "下一集", "换源"};
+        for (int i = 0; i < 5; i++) {
+            kb[i] = chip(names[i]);
+            keys.addView(kb[i]);
         }
         LinearLayout.LayoutParams kpl = new LinearLayout.LayoutParams(-2, -2);
         kpl.topMargin = dp(12);
@@ -422,30 +432,145 @@ public class PlayerActivity extends Activity {
             h.removeCallbacks(ticker);
             h.post(ticker);
         }
-        h.postDelayed(autoHide, 4500);
+        h.postDelayed(autoHide, keySel >= 0 ? 10000 : 4500);
     }
 
     private int epCount() { JSONArray a = eps(si); return a == null ? 0 : a.length(); }
-    private boolean canKey(int w) { return w == 0 ? ei > 0 : ei + 1 < epCount(); }
+    private boolean canKey(int w) {
+        if (w == K_PREV) return ei > 0;
+        if (w == K_NEXT) return ei + 1 < epCount();
+        if (w == K_SRC) return sources != null && sources.length() > 1;
+        return w >= 0 && w < 5;
+    }
+
+    private TextView chip(String text) {
+        TextView t = tv(15, 0xF2FFFFFF, "sans-serif");
+        t.setShadowLayer(0, 0, 0, 0);
+        t.setSingleLine(true);
+        t.setText(text);
+        t.setPadding(dp(20), dp(8), dp(20), dp(8));
+        LinearLayout.LayoutParams kl = new LinearLayout.LayoutParams(-2, -2);
+        kl.rightMargin = dp(12);
+        t.setLayoutParams(kl);
+        return t;
+    }
+
+    private void styleChip(TextView t, boolean sel, boolean on, boolean cur) {
+        GradientDrawable g = new GradientDrawable();
+        g.setCornerRadius(dp(18));
+        g.setColor(sel ? 0x40FF6A3D : 0x1FFFFFFF);
+        g.setStroke(Math.max(1, dp(sel ? 2 : 1)), sel ? AC : 0x26FFFFFF);
+        t.setBackground(g);
+        t.setTextColor(!on ? 0x4DFFFFFF : cur ? 0xFFFFA477 : sel ? 0xFFFFFFFF : 0xCCFFFFFF);
+    }
 
     private void paintKeys() {
-        TextView[] ks = {kPrev, kNext};
-        for (int i = 0; i < 2; i++) {
-            boolean on = canKey(i), sel = keySel == i;
-            GradientDrawable g = new GradientDrawable();
-            g.setCornerRadius(dp(18));
-            g.setColor(sel ? 0x40FF6A3D : 0x1FFFFFFF);
-            g.setStroke(Math.max(1, dp(sel ? 2 : 1)), sel ? AC : 0x26FFFFFF);
-            ks[i].setBackground(g);
-            ks[i].setTextColor(on ? (sel ? 0xFFFFFFFF : 0xCCFFFFFF) : 0x4DFFFFFF);
-        }
+        if (keys == null) return;
+        kb[K_PLAY].setText(player != null && !player.getPlayWhenReady() ? "播放" : "暂停");
+        for (int i = 0; i < 5; i++) styleChip(kb[i], keySel == i && srcSel < 0, canKey(i), false);
     }
 
     private void enterKeys() {
-        int w = canKey(1) ? 1 : canKey(0) ? 0 : -1;
-        if (w < 0) { showStatus("只有这一集", 1500); showOsd(); return; }
-        keySel = w;
+        keySel = canKey(K_NEXT) ? K_NEXT : K_PLAY;
+        srcSel = -1;
         keys.setVisibility(View.VISIBLE);
+        paintKeys();
+        showOsd();
+    }
+
+    private void exitKeys() {
+        keySel = -1;
+        srcSel = -1;
+        if (keys != null) keys.setVisibility(View.GONE);
+        if (srcScroll != null) srcScroll.setVisibility(View.GONE);
+    }
+
+    private void moveKey(int d) {
+        for (int w = keySel + d; w >= 0 && w < 5; w += d) if (canKey(w)) { keySel = w; break; }
+        paintKeys();
+    }
+
+    private void doKey() {
+        switch (keySel) {
+            case K_PLAY:
+                player.setPlayWhenReady(!player.getPlayWhenReady());
+                refreshCenter();
+                break;
+            case K_HEAD:
+                player.seekTo(0);
+                player.setPlayWhenReady(true);
+                refreshCenter();
+                showStatus("从头播放", 1500);
+                break;
+            case K_PREV: jumpEp(ei - 1); break;
+            case K_NEXT: jumpEp(ei + 1); break;
+            case K_SRC: openSrc(); return;
+        }
+        if (!canKey(keySel)) moveKey(keySel == K_PREV ? 1 : -1);
+        paintKeys();
+        showOsd();
+    }
+
+    // ---- 片源一行 ----
+    private void openSrc() {
+        srcRow.removeAllViews();
+        for (int i = 0; i <= sources.length(); i++) {
+            String t;
+            if (i == 0) t = "自动选择";
+            else {
+                JSONObject o = sources.optJSONObject(i - 1);
+                String res = resName(o.optInt("h", 0));
+                long bps = o.optLong("bps", 0);
+                t = o.optString("site") + (res.length() > 0 ? "  " + res : "")
+                        + (bps > 0 ? String.format(java.util.Locale.US, "  %.1fM", bps / 1048576.0) : bps < 0 ? "  不通" : "");
+            }
+            srcRow.addView(chip(t));
+        }
+        srcSel = autoSrc ? 0 : si + 1;
+        srcScroll.setVisibility(View.VISIBLE);
+        paintSrc();
+        paintKeys();
+        showOsd();
+    }
+
+    private void paintSrc() {
+        int cur = autoSrc ? 0 : si + 1;
+        for (int i = 0; i < srcRow.getChildCount(); i++)
+            styleChip((TextView) srcRow.getChildAt(i), i == srcSel, true, i == cur);
+        final View v = srcRow.getChildAt(Math.max(0, srcSel));
+        if (v != null) srcScroll.post(new Runnable() { public void run() {
+            int x = v.getLeft() - (srcScroll.getWidth() - v.getWidth()) / 2;
+            srcScroll.smoothScrollTo(Math.max(0, x), 0);
+        } });
+    }
+
+    private void closeSrc() {
+        srcSel = -1;
+        srcScroll.setVisibility(View.GONE);
+        paintKeys();
+        showOsd();
+    }
+
+    /** w=0 自动选择，w=i+1 第 i 个源；保留进度 */
+    private void pickSource(int w) {
+        long pos = player.getCurrentPosition();
+        int to;
+        if (w == 0) { autoSrc = true; to = bestSource(); }
+        else { autoSrc = false; to = w - 1; }
+        if (to != si) {
+            int idx = matchEp(eps(to), epName(), ei);
+            si = to; ei = Math.max(0, idx); failed.clear(); load(pos);
+        }
+        showStatus("切换到「" + sources.optJSONObject(si).optString("site") + "」", 2000);
+    }
+
+    private void jumpEp(int to) {
+        if (to < 0 || to >= epCount() || to == ei) return;
+        save();
+        ei = to;
+        failed.clear();
+        showStatus("播放 " + epName(), 2000);
+        load(0);
         paintKeys();
         showOsd();
     }
@@ -488,6 +613,7 @@ public class PlayerActivity extends Activity {
     private void refreshCenter() {
         boolean paused = player != null && !player.getPlayWhenReady();
         fade(center, paused);
+        if (keySel >= 0) paintKeys();
         if (paused) { h.removeCallbacks(autoHide); if (!osdOn) showOsd(); h.removeCallbacks(autoHide); }
     }
 
@@ -634,7 +760,7 @@ public class PlayerActivity extends Activity {
         ll.topMargin = dp(9);
         box.addView(tabLine, ll);
         TextView tip = tv(12, 0x66FFFFFF, "sans-serif");
-        tip.setText(Ui.phone(this) ? "点「选集 / 换源」切换    点空白处关闭" : "◀ ▶ 切换    OK 选择    返回 关闭");
+        tip.setText(Ui.phone(this) ? "点「选集 / 换源」切换    点空白处关闭" : "OK 选择    返回 关闭");
         LinearLayout.LayoutParams pl = new LinearLayout.LayoutParams(-2, -2);
         pl.topMargin = dp(12);
         box.addView(tip, pl);
@@ -651,25 +777,18 @@ public class PlayerActivity extends Activity {
         LinearLayout.LayoutParams ql = new LinearLayout.LayoutParams(-1, 0, 1f);
         ql.topMargin = dp(16);
         box.addView(plist, ql);
-        FrameLayout.LayoutParams bp = new FrameLayout.LayoutParams(dp(420), -1, Gravity.END);
+        boolean ph = Ui.phone(this);   // 电视：右侧只留选集，换源移到 ▼ 快捷栏，菜单收窄
+        if (!ph) { tabSrc.setVisibility(View.GONE); box.setPadding(dp(28), dp(40), dp(32), dp(28)); }
+        FrameLayout.LayoutParams bp = new FrameLayout.LayoutParams(dp(ph ? 420 : 280), -1, Gravity.END);
         panel.addView(box, bp);
-        root.addView(panel, new FrameLayout.LayoutParams(dp(560), -1, Gravity.END));
+        root.addView(panel, new FrameLayout.LayoutParams(dp(ph ? 560 : 400), -1, Gravity.END));
         panel.setVisibility(View.GONE);
         plist.setOnItemClickListener(new android.widget.AdapterView.OnItemClickListener() {
             public void onItemClick(android.widget.AdapterView<?> p, View v, int w, long id) {
                 hidePanel();
                 if (tab == 0) { save(); ei = w; failed.clear(); load(0); }
-                else {
-                    long pos = player.getCurrentPosition();
-                    int to;
-                    if (w == 0) { autoSrc = true; to = bestSource(); }
-                    else { autoSrc = false; to = w - 1; }
-                    if (to != si) {
-                        int idx = matchEp(eps(to), epName(), ei);
-                        si = to; ei = Math.max(0, idx); failed.clear(); load(pos);
-                    }
-                }
-                showStatus(tab == 0 ? "播放 " + epName() : "切换到「" + sources.optJSONObject(si).optString("site") + "」", 2000);
+                else { pickSource(w); return; }
+                showStatus("播放 " + epName(), 2000);
             }
         });
     }
@@ -796,7 +915,7 @@ public class PlayerActivity extends Activity {
             load(pos);
             return;
         }
-        showStatus("所有片源都试过了，按 ▲ 手动选源", 0);
+        showStatus(Ui.phone(this) ? "所有片源都试过了，点「换源」手动选" : "所有片源都试过了，按 ▼ 选「换源」", 0);
         failed.clear();
     }
 
@@ -861,28 +980,32 @@ public class PlayerActivity extends Activity {
             kickPanelIdle();
             if (k == KeyEvent.KEYCODE_BACK || k == KeyEvent.KEYCODE_MENU) { if (!down) hidePanel(); return true; }
             if (k == KeyEvent.KEYCODE_DPAD_LEFT || k == KeyEvent.KEYCODE_DPAD_RIGHT) {
-                if (down && e.getRepeatCount() == 0) { tab = k == KeyEvent.KEYCODE_DPAD_LEFT ? 0 : 1; fillPanel(); }
+                if (down && e.getRepeatCount() == 0 && Ui.phone(this)) { tab = k == KeyEvent.KEYCODE_DPAD_LEFT ? 0 : 1; fillPanel(); }
                 return true;
             }
             return super.dispatchKeyEvent(e);
         }
-        if (keySel >= 0) {   // 快捷键模式：◀ ▶ 选择，OK 执行，▲ / 返回 退出，▼ 收起
+        if (keySel >= 0) {   // 快捷栏：◀ ▶ 选择，OK 执行，▲ / 返回 退出，▼ 收起；选片源时 ▼ ▲ 返回 回到快捷栏
+            boolean ok = k == KeyEvent.KEYCODE_DPAD_CENTER || k == KeyEvent.KEYCODE_ENTER;
             if (k == KeyEvent.KEYCODE_DPAD_LEFT || k == KeyEvent.KEYCODE_DPAD_RIGHT) {
-                if (down && e.getRepeatCount() == 0) {
-                    int w = k == KeyEvent.KEYCODE_DPAD_LEFT ? 0 : 1;
-                    if (canKey(w)) keySel = w;
-                    paintKeys();
+                if (down) {
+                    int d = k == KeyEvent.KEYCODE_DPAD_LEFT ? -1 : 1;
+                    if (srcSel >= 0) { srcSel = Math.max(0, Math.min(srcRow.getChildCount() - 1, srcSel + d)); paintSrc(); }
+                    else if (e.getRepeatCount() == 0) moveKey(d);
                     showOsd();
                 }
                 return true;
             }
-            if (k == KeyEvent.KEYCODE_DPAD_CENTER || k == KeyEvent.KEYCODE_ENTER) {
+            if (ok) {
                 if (down) { okDown = true; return true; }
                 if (!okDown) return true;
                 okDown = false;
-                jumpEp(keySel == 0 ? ei - 1 : ei + 1);
-                if (!canKey(keySel)) keySel = canKey(1 - keySel) ? 1 - keySel : keySel;
-                paintKeys();
+                if (srcSel >= 0) { int w = srcSel; closeSrc(); pickSource(w); }
+                else doKey();
+                return true;
+            }
+            if (srcSel >= 0 && (k == KeyEvent.KEYCODE_DPAD_DOWN || k == KeyEvent.KEYCODE_BACK || k == KeyEvent.KEYCODE_DPAD_UP)) {
+                if (!down) closeSrc();
                 return true;
             }
             if (k == KeyEvent.KEYCODE_DPAD_UP || k == KeyEvent.KEYCODE_BACK) {
