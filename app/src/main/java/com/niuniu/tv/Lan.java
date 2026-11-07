@@ -148,6 +148,7 @@ public class Lan {
                 o.put("version", BuildConfigVersion.NAME);
                 o.put("srcUrl", cfg(ctx).getString("srcUrl", ""));
                 o.put("hist", Hist.all(ctx).length());
+                o.put("apk", Upd.info(ctx));
                 o.put("src", cfg(ctx).getString("srcState", "{}"));
                 send(out, 200, "application/json; charset=utf-8", o.toString().getBytes("UTF-8"));
             } else if ("POST".equals(method) && path.startsWith("/api/")) {
@@ -165,6 +166,8 @@ public class Lan {
                     send(out, 200, "application/json; charset=utf-8", res.getBytes("UTF-8"));
                     s.close();
                     return;
+                } else if (act.equals("apkclean")) {
+                    Upd.cleanup(ctx, true);
                 } else if (act.equals("hist")) {
                     Hist.clear(ctx);
                     js.run("window.nnRemote&&nnRemote('hist')");

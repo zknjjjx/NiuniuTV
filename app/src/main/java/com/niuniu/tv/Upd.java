@@ -49,6 +49,22 @@ public class Upd {
         return n;
     }
 
+    /** 统计残留安装包：{"n":个数,"mb":大小} */
+    static JSONObject info(Context c) {
+        int n = 0; long b = 0;
+        File[] roots = { c.getCacheDir(), c.getExternalCacheDir() };
+        for (File r : roots) {
+            if (r == null) continue;
+            File[] fs = new File(r, "apk").listFiles();
+            if (fs != null) for (File f : fs) if (f.isFile()) { n++; b += f.length(); }
+            File[] top = r.listFiles();
+            if (top != null) for (File f : top) if (f.isFile() && f.getName().endsWith(".apk")) { n++; b += f.length(); }
+        }
+        JSONObject o = new JSONObject();
+        try { o.put("n", n); o.put("mb", Math.round(b / 104857.6) / 10.0); } catch (Exception ignored) {}
+        return o;
+    }
+
     /** 在线升级：按顺序试几个下载地址（加速镜像在前），下完校验是本 App 再安装 */
     static String upgrade(Context c, String[] urls, Lan.Js js) {
         String last = "没有下载地址";

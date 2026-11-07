@@ -150,6 +150,12 @@ public class MainActivity extends Activity {
         public String lan() { return lan == null ? "{}" : lan.info(); }
 
         @JavascriptInterface
+        public String apkInfo() { return Upd.info(MainActivity.this).toString(); }
+
+        @JavascriptInterface
+        public int apkClean() { return Upd.cleanup(MainActivity.this, true); }
+
+        @JavascriptInterface
         public String version() { return BuildConfigVersion.NAME; }
 
         /** 在线升级：urls 为 JSON 数组，按顺序尝试；进度和失败通过 nnUpg 回调 */

@@ -772,6 +772,7 @@ const PAGES = {
       <div class="setrow f" id="sUrl"><span>片源地址</span><small>${esc(custom || "默认：zknjjjx/tvbox 的 cmstv.json（自动加速）")}</small></div>
       <div class="setrow f" id="sReset"><span>恢复默认片源</span><small>清掉自定义地址</small></div>
       <div class="setrow f" id="sUpd"><span>检查更新</span><small id="sUpdS">当前 ${APP ? esc(NN.version()) : "dev"}${UPD.latest ? (hasNew() ? ` · 有新版 ${esc(UPD.latest.version)}，按 OK 升级` : " · 已是最新") : ""}</small></div>
+      <div class="setrow f" id="sApk"><span>安装包残留</span><small id="sApkS">${(() => { let a = { n: 0 }; try { a = APP && NN.apkInfo ? JSON.parse(NN.apkInfo()) : a; } catch (e) {} return a.n ? `${a.n} 个 · ${a.mb} MB，按 OK 删除` : "没有残留，已全部删除"; })()}</small></div>
       <div class="setrow f" id="sClear"><span>清除观看记录</span><small>${histAll().length} 条</small></div>
       <div class="setrow" style="opacity:.6"><span>播放说明</span><small>自动测速挑最快源；起播 12 秒没画面或卡住 20 秒自动换源；播放中按 ▲ 选集换源</small></div></div>`;
     $("#sRefresh")._ok = async () => { toast("正在刷新片源…"); await loadSources(true); toast(`片源已更新：${SRC.list.length} 个`); render("settings"); };
@@ -790,6 +791,7 @@ const PAGES = {
       checkUpdate().then(() => { if (hasNew()) askUpgrade(); else { $("#sUpdS").textContent = `当前 ${NN.version()} · 已是最新`; toast("已是最新版本"); } })
         .catch(() => { $("#sUpdS").textContent = "检查失败，连不上 GitHub"; });
     };
+    $("#sApk")._ok = () => { if (APP && NN.apkClean) NN.apkClean(); $("#sApkS").textContent = "没有残留，已全部删除"; toast("安装包已删除"); };
     $("#sClear")._ok = () => { histAll().forEach(h => APP && NN.delHistory(h.key)); toast("已清除"); render("settings"); };
     F.set($("#sRefresh"));
   },

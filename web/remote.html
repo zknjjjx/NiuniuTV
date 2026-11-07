@@ -25,6 +25,7 @@ button.pri{background:linear-gradient(90deg,#ff5a36,#ffb547);color:#1b0d06;font-
 <div class="card"><h2>片源地址</h2><p id="srcInfo">—</p>
 <input id="url" placeholder="留空 = 默认（zknjjjx/tvbox 的 cmstv.json，自动加速）">
 <div class="row"><button class="pri" onclick="saveSrc()">保存并刷新</button><button onclick="document.getElementById('url').value='';saveSrc()">恢复默认</button></div></div>
+<div class="card"><h2>电视里的安装包</h2><p id="apkInfo">—</p><div class="row"><button onclick="cleanApk()">立即删除</button></div></div>
 <div class="card"><h2>观看记录</h2><p id="histInfo">—</p><div class="row"><button onclick="clearHist()">清除全部观看记录</button></div></div>
 <div id="msg"></div>
 <script>
@@ -36,6 +37,7 @@ function load(){fetch('/api/state').then(function(r){return r.json()}).then(func
   var st={};try{st=JSON.parse(s.src||'{}')}catch(e){}
   document.getElementById('srcInfo').textContent=(st.n?('当前 '+st.n+' 个采集站 · 来自 '+(st.from||'')):'当前片源状态未知');
   document.getElementById('histInfo').textContent='共 '+s.hist+' 条';
+  var a=s.apk||{n:0,mb:0};document.getElementById('apkInfo').textContent=a.n?('残留 '+a.n+' 个，'+a.mb+' MB'):'没有残留，已全部删除';
 }).catch(function(){document.getElementById('ver').textContent='连不上电视，请确认在同一局域网'})}
 function search(){var q=document.getElementById('q').value.trim();if(!q)return;post('search',{q:q}).then(function(){msg('已发到电视')})}
 function saveSrc(){post('src',{url:document.getElementById('url').value.trim()}).then(function(){msg('已保存，电视正在刷新片源');setTimeout(load,6000)})}
@@ -44,6 +46,7 @@ function pushApk(){var f=document.getElementById('apk').files[0];if(!f){msg('先
   x.upload.onprogress=function(e){if(e.lengthComputable)document.getElementById('barin').style.width=(e.loaded*100/e.total)+'%'};
   x.onload=function(){try{var r=JSON.parse(x.responseText);msg(r.msg||'已发送')}catch(e){msg('已发送')}};x.onerror=function(){msg('上传失败')};x.send(f);msg('上传中…')}
 function pushUrl(){var u=document.getElementById('apkurl').value.trim();if(!u)return;msg('电视正在下载…');post('apkurl',{url:u}).then(function(r){msg(r.msg||'已发送')}).catch(function(){msg('失败')})}
+function cleanApk(){post('apkclean').then(function(){msg('已删除');load()})}
 function clearHist(){if(!confirm('确定清除全部观看记录？'))return;post('hist').then(function(){msg('已清除');load()})}
 document.getElementById('q').addEventListener('keydown',function(e){if(e.keyCode===13)search()});
 load();

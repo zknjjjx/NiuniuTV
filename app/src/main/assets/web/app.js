@@ -1174,6 +1174,14 @@ const PAGES = {
       <div class="setrow f" id="sUrl"><span>\u7247\u6E90\u5730\u5740</span><small>${esc(custom || "\u9ED8\u8BA4\uFF1Azknjjjx/tvbox \u7684 cmstv.json\uFF08\u81EA\u52A8\u52A0\u901F\uFF09")}</small></div>
       <div class="setrow f" id="sReset"><span>\u6062\u590D\u9ED8\u8BA4\u7247\u6E90</span><small>\u6E05\u6389\u81EA\u5B9A\u4E49\u5730\u5740</small></div>
       <div class="setrow f" id="sUpd"><span>\u68C0\u67E5\u66F4\u65B0</span><small id="sUpdS">\u5F53\u524D ${APP ? esc(NN.version()) : "dev"}${UPD.latest ? hasNew() ? ` \xB7 \u6709\u65B0\u7248 ${esc(UPD.latest.version)}\uFF0C\u6309 OK \u5347\u7EA7` : " \xB7 \u5DF2\u662F\u6700\u65B0" : ""}</small></div>
+      <div class="setrow f" id="sApk"><span>\u5B89\u88C5\u5305\u6B8B\u7559</span><small id="sApkS">${(() => {
+        let a = { n: 0 };
+        try {
+          a = APP && NN.apkInfo ? JSON.parse(NN.apkInfo()) : a;
+        } catch (e) {
+        }
+        return a.n ? `${a.n} \u4E2A \xB7 ${a.mb} MB\uFF0C\u6309 OK \u5220\u9664` : "\u6CA1\u6709\u6B8B\u7559\uFF0C\u5DF2\u5168\u90E8\u5220\u9664";
+      })()}</small></div>
       <div class="setrow f" id="sClear"><span>\u6E05\u9664\u89C2\u770B\u8BB0\u5F55</span><small>${histAll().length} \u6761</small></div>
       <div class="setrow" style="opacity:.6"><span>\u64AD\u653E\u8BF4\u660E</span><small>\u81EA\u52A8\u6D4B\u901F\u6311\u6700\u5FEB\u6E90\uFF1B\u8D77\u64AD 12 \u79D2\u6CA1\u753B\u9762\u6216\u5361\u4F4F 20 \u79D2\u81EA\u52A8\u6362\u6E90\uFF1B\u64AD\u653E\u4E2D\u6309 \u25B2 \u9009\u96C6\u6362\u6E90</small></div></div>`;
       $("#sRefresh")._ok = () => __async(this, null, function* () {
@@ -1219,6 +1227,11 @@ const PAGES = {
         }).catch(() => {
           $("#sUpdS").textContent = "\u68C0\u67E5\u5931\u8D25\uFF0C\u8FDE\u4E0D\u4E0A GitHub";
         });
+      };
+      $("#sApk")._ok = () => {
+        if (APP && NN.apkClean) NN.apkClean();
+        $("#sApkS").textContent = "\u6CA1\u6709\u6B8B\u7559\uFF0C\u5DF2\u5168\u90E8\u5220\u9664";
+        toast("\u5B89\u88C5\u5305\u5DF2\u5220\u9664");
       };
       $("#sClear")._ok = () => {
         histAll().forEach((h) => APP && NN.delHistory(h.key));
