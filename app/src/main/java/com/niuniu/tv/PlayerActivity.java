@@ -65,11 +65,20 @@ public class PlayerActivity extends Activity {
         public void run() {
             if (player == null) return;
             if (player.getPlaybackState() == Player.STATE_BUFFERING || !started) {
+                // 后台缓存还在进账：不急着换源，最多再等到卡住 90 秒
+                long stuck = android.os.SystemClock.uptimeMillis() - bufSince;
+                if (Pre.progressing(curUrl, 8000) && stuck < 90000) { h.postDelayed(this, 5000); return; }
                 switchSource(started ? "卡顿太久" : "起播太慢");
             }
         }
     };
     private final Runnable hideStatus = new Runnable() { public void run() { fade(status, false); } };
+    private String curUrl = "";
+    private long bufSince = 0;
+    private final Runnable posTick = new Runnable() { public void run() {
+        if (player != null) Pre.position(curUrl, player.getCurrentPosition());
+        h.postDelayed(this, 1000);
+    } };
     private final Runnable saver = new Runnable() { public void run() { save(); h.postDelayed(this, 10000); } };
 
     @Override
@@ -98,16 +107,16 @@ public class PlayerActivity extends Activity {
         setContentView(root);
         if (Ui.phone(this)) touch(root);
 
-        DefaultHttpDataSource.Factory http = new DefaultHttpDataSource.Factory()
-                .setUserAgent(Net.UA).setAllowCrossProtocolRedirects(true)
-                .setConnectTimeoutMs(10000).setReadTimeoutMs(15000);
+        // 分片走磁盘缓存（后台 Pre 领先 10 分钟预下载）；卡顿后多攒 5 秒再继续，避免一卡再卡
         DefaultLoadControl lc = new DefaultLoadControl.Builder()
-                .setBufferDurationsMs(15000, 60000, 1500, 3000).build();
+                .setBufferDurationsMs(15000, 60000, 1500, 5000).build();
+        androidx.media3.exoplayer.trackselection.DefaultTrackSelector ts = new androidx.media3.exoplayer.trackselection.DefaultTrackSelector(this);
+        ts.setParameters(ts.buildUponParameters().setForceHighestSupportedBitrate(true));
         player = new ExoPlayer.Builder(this, new DefaultRenderersFactory(this)
                 .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
                 .setEnableDecoderFallback(true))
-                .setMediaSourceFactory(new DefaultMediaSourceFactory(new AdFilter.Factory(http)))
-                .setLoadControl(lc).build();
+                .setMediaSourceFactory(new DefaultMediaSourceFactory(Pre.playerFactory(this)))
+                .setTrackSelector(ts).setLoadControl(lc).build();
         view.setPlayer(player);
         // m3u8/ts 多数不标帧率：按实际渲染的帧时间戳估算，再对齐屏幕刷新率
         player.setVideoFrameMetadataListener(new androidx.media3.exoplayer.video.VideoFrameMetadataListener() {
@@ -156,6 +165,7 @@ public class PlayerActivity extends Activity {
                         showOsd();
                     }
                 } else if (st == Player.STATE_BUFFERING) {
+                    bufSince = android.os.SystemClock.uptimeMillis();
                     h.removeCallbacks(watchdog);
                     h.postDelayed(watchdog, started ? STALL_TIMEOUT : START_TIMEOUT);
                 } else if (st == Player.STATE_ENDED) {
@@ -181,6 +191,7 @@ public class PlayerActivity extends Activity {
         }
         load(resumePos);
         h.postDelayed(saver, 10000);
+        h.postDelayed(posTick, 1000);
     }
 
     private int dp(int v) { return (int) (v * getResources().getDisplayMetrics().density); }
@@ -203,6 +214,9 @@ public class PlayerActivity extends Activity {
         if (ei >= a.length()) ei = a.length() - 1;
         String url = a.optJSONObject(ei).optString("url");
         started = false;
+        curUrl = url;
+        bufSince = android.os.SystemClock.uptimeMillis();
+        Pre.start(this, url, pos, Pre.AHEAD_MS);   // 换源/换集＝新地址：旧缓存删掉，开始缓存新的
         MediaItem.Builder mb = new MediaItem.Builder().setUri(Uri.parse(url));
         if (url.contains(".m3u8")) mb.setMimeType(MimeTypes.APPLICATION_M3U8);
         player.setMediaItem(mb.build(), pos > 0 ? pos : C.TIME_UNSET);

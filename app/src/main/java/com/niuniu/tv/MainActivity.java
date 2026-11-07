@@ -24,6 +24,7 @@ import java.io.ByteArrayInputStream;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+@androidx.annotation.OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)
 public class MainActivity extends Activity {
     private WebView web;
     private final ExecutorService pool = Executors.newFixedThreadPool(16);
@@ -38,6 +39,7 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle b) {
         super.onCreate(b);
         Net.init();
+        new Thread(new Runnable() { public void run() { Pre.cache(MainActivity.this); } }).start();   // 每次开 App 清空播放缓存
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         web = new WebView(this);
         // 电视：网页画出来之前透明，露出窗口背景里的启动狗狗，避免闪一下
@@ -149,6 +151,12 @@ public class MainActivity extends Activity {
                     startActivity(i);
                 }
             });
+        }
+
+        /** 详情页测速定下片源后预载开头几分钟；地址变了就删旧缓存换新的 */
+        @JavascriptInterface
+        public void prefetch(final String url, final double posMs) {
+            pool.execute(new Runnable() { public void run() { Pre.start(MainActivity.this, url, (long) posMs, Pre.PRELOAD_MS); } });
         }
 
         @JavascriptInterface

@@ -637,6 +637,34 @@ const PAGES = {
       resolving.done.then(() => { if (tok === routeTok) { st.done = true; status(); } });
     };
 
+    // 片源排序（播放与详情页预载共用同一规则，保证预载的就是要播的那个源）
+    function rank(ei) {
+      const need = ei + 1, maxEp = Math.max.apply(null, st.srcs.map(s => s.eps.length));
+      const score = srcScore;
+      return st.srcs.slice().sort((a, b) => {
+        const ha = a.eps.length >= need ? 1 : 0, hb = b.eps.length >= need ? 1 : 0;
+        if (ha !== hb) return hb - ha;
+        if (kind === "tv" && maxEp > 1) { const fa = a.eps.length >= maxEp * 0.9 ? 1 : 0, fb = b.eps.length >= maxEp * 0.9 ? 1 : 0; if (fa !== fb && (a.bps > 0) === (b.bps > 0)) return fb - fa; }
+        return score(b) - score(a);
+      });
+    }
+    // 详情页预载：测速有结论后（与按播放时同样的等待规则）先缓存要播那一集的开头
+    if (APP && NN.prefetch) {
+      const t0 = Date.now();
+      const pre = () => {
+        if (tok !== routeTok) return;
+        const ok = st.srcs.filter(s => s.bps > 0).length, waited = Date.now() - t0;
+        if (!(ok >= 3 || (ok >= 1 && waited > 6000) || (ok >= 1 && st.done && st.probing === 0 && !probeQ.length))) {
+          if (waited < 30000) setTimeout(pre, 500);
+          return;
+        }
+        const h = hist(), ei = h ? h.ei : 0, s = rank(ei)[0];
+        if (!s || !(s.bps > 0)) return;
+        const e = s.eps[Math.min(ei, s.eps.length - 1)];
+        if (e && e.url) NN.prefetch(e.url, h && h.ei === ei ? (h.pos || 0) : 0);
+      };
+      setTimeout(pre, 1500);
+    }
     // 选源并播放：等测速出结果（最多等 10 秒），按速度从快到慢交给播放器，失败自动换下一个
     async function startPlay(ei, pos) {
       if (tok !== routeTok) return;
@@ -654,14 +682,7 @@ const PAGES = {
       }
       if (cancelled || tok !== routeTok) return;
       if (!st.srcs.length) { closeLayer(); toast("没找到可播放的片源"); return; }
-      const need = ei + 1, maxEp = Math.max.apply(null, st.srcs.map(s => s.eps.length));
-      const score = srcScore;
-      const list = st.srcs.slice().sort((a, b) => {
-        const ha = a.eps.length >= need ? 1 : 0, hb = b.eps.length >= need ? 1 : 0;
-        if (ha !== hb) return hb - ha;
-        if (kind === "tv" && maxEp > 1) { const fa = a.eps.length >= maxEp * 0.9 ? 1 : 0, fb = b.eps.length >= maxEp * 0.9 ? 1 : 0; if (fa !== fb && (a.bps > 0) === (b.bps > 0)) return fb - fa; }
-        return score(b) - score(a);
-      });
+      const list = rank(ei);
       closeLayer();
       const data = { key, title: meta.title, pic: meta.pic || it.pic, id: it.id || "", type: kind, year: meta.year || "", si: 0, ei, pos: pos || 0,
         sources: list.map(s => ({ site: s.site, eps: s.eps, bps: s.bps == null ? 0 : s.bps, h: s.h || 0 })) };

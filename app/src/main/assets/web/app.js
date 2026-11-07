@@ -989,6 +989,35 @@ const PAGES = {
           }
         });
       };
+      function rank(ei) {
+        const need = ei + 1, maxEp = Math.max.apply(null, st.srcs.map((s) => s.eps.length));
+        const score = srcScore;
+        return st.srcs.slice().sort((a, b) => {
+          const ha = a.eps.length >= need ? 1 : 0, hb = b.eps.length >= need ? 1 : 0;
+          if (ha !== hb) return hb - ha;
+          if (kind === "tv" && maxEp > 1) {
+            const fa = a.eps.length >= maxEp * 0.9 ? 1 : 0, fb = b.eps.length >= maxEp * 0.9 ? 1 : 0;
+            if (fa !== fb && a.bps > 0 === b.bps > 0) return fb - fa;
+          }
+          return score(b) - score(a);
+        });
+      }
+      if (APP && NN.prefetch) {
+        const t0 = Date.now();
+        const pre = () => {
+          if (tok !== routeTok) return;
+          const ok = st.srcs.filter((s2) => s2.bps > 0).length, waited = Date.now() - t0;
+          if (!(ok >= 3 || ok >= 1 && waited > 6e3 || ok >= 1 && st.done && st.probing === 0 && !probeQ.length)) {
+            if (waited < 3e4) setTimeout(pre, 500);
+            return;
+          }
+          const h = hist(), ei = h ? h.ei : 0, s = rank(ei)[0];
+          if (!s || !(s.bps > 0)) return;
+          const e = s.eps[Math.min(ei, s.eps.length - 1)];
+          if (e && e.url) NN.prefetch(e.url, h && h.ei === ei ? h.pos || 0 : 0);
+        };
+        setTimeout(pre, 1500);
+      }
       function startPlay(ei, pos) {
         return __async(this, null, function* () {
           if (tok !== routeTok) return;
@@ -1012,17 +1041,7 @@ const PAGES = {
             toast("\u6CA1\u627E\u5230\u53EF\u64AD\u653E\u7684\u7247\u6E90");
             return;
           }
-          const need = ei + 1, maxEp = Math.max.apply(null, st.srcs.map((s) => s.eps.length));
-          const score = srcScore;
-          const list = st.srcs.slice().sort((a, b) => {
-            const ha = a.eps.length >= need ? 1 : 0, hb = b.eps.length >= need ? 1 : 0;
-            if (ha !== hb) return hb - ha;
-            if (kind === "tv" && maxEp > 1) {
-              const fa = a.eps.length >= maxEp * 0.9 ? 1 : 0, fb = b.eps.length >= maxEp * 0.9 ? 1 : 0;
-              if (fa !== fb && a.bps > 0 === b.bps > 0) return fb - fa;
-            }
-            return score(b) - score(a);
-          });
+          const list = rank(ei);
           closeLayer();
           const data = {
             key,
