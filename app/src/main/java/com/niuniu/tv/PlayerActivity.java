@@ -573,7 +573,7 @@ public class PlayerActivity extends Activity {
         ll.topMargin = dp(9);
         box.addView(tabLine, ll);
         TextView tip = tv(12, 0x66FFFFFF, "sans-serif");
-        tip.setText("◀ ▶ 切换    OK 选择    返回 关闭");
+        tip.setText(Ui.phone(this) ? "点「选集 / 换源」切换    点空白处关闭" : "◀ ▶ 切换    OK 选择    返回 关闭");
         LinearLayout.LayoutParams pl = new LinearLayout.LayoutParams(-2, -2);
         pl.topMargin = dp(12);
         box.addView(tip, pl);
