@@ -282,6 +282,7 @@ public class PlayerActivity extends Activity {
     private Bar bar;
     private PlayIcon center;
     private boolean osdOn = false;
+    private boolean okDown = false;
     private long seekTarget = -1, seekHold = 0, seekLast = 0;
     private FrameLayout panel;
     private ListView plist;
@@ -673,7 +674,10 @@ public class PlayerActivity extends Activity {
         }
         if (k == KeyEvent.KEYCODE_DPAD_CENTER || k == KeyEvent.KEYCODE_ENTER || k == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
                 || k == KeyEvent.KEYCODE_MEDIA_PLAY || k == KeyEvent.KEYCODE_MEDIA_PAUSE) {
-            if (!down) {
+            if (down) { okDown = true; return true; }
+            if (!okDown) return true;   // 详情页按 OK 的“抬起”会落到播放页，忽略，避免一进来就暂停
+            okDown = false;
+            {
                 if (seekTarget >= 0) { commitSeek(); return true; }
                 boolean play = k == KeyEvent.KEYCODE_MEDIA_PLAY || (k != KeyEvent.KEYCODE_MEDIA_PAUSE && !player.getPlayWhenReady());
                 player.setPlayWhenReady(play);
