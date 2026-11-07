@@ -282,7 +282,7 @@ public class PlayerActivity extends Activity {
     private Bar bar;
     private PlayIcon center;
     private boolean osdOn = false;
-    private long seekTarget = -1;
+    private long seekTarget = -1, seekHold = 0, seekLast = 0;
     private FrameLayout panel;
     private ListView plist;
     private TextView tabEp, tabSrc;
@@ -423,8 +423,13 @@ public class PlayerActivity extends Activity {
 
     private void seekBy(boolean fwd, int repeat) {
         long dur = player.getDuration();
+        long now = android.os.SystemClock.uptimeMillis();
+        if (repeat == 0) seekHold = now;
+        else if (now - seekLast < 180) return;   // 长按节流：约每 0.18 秒走一步
+        seekLast = now;
         if (seekTarget < 0) seekTarget = player.getCurrentPosition();
-        long step = repeat > 12 ? 60000 : repeat > 4 ? 30000 : 10000;
+        long held = now - seekHold;
+        long step = repeat == 0 ? 10000 : held < 2500 ? 5000 : held < 6000 ? 10000 : 20000;
         seekTarget += fwd ? step : -step;
         if (seekTarget < 0) seekTarget = 0;
         if (dur > 0 && dur != C.TIME_UNSET && seekTarget > dur - 3000) seekTarget = Math.max(0, dur - 3000);
