@@ -81,13 +81,14 @@ def serve(ready):
 
 class Api:
     def __init__(self):
-        self.win, self.fs = None, False
+        # 属性用下划线开头：pywebview 会遍历 js_api 的公开属性，碰到窗口对象会在启动时出错
+        self._win, self._fs = None, False
 
     def fullscreen(self, on):
         on = bool(on)
-        if self.win and on != self.fs:
-            self.fs = on
-            self.win.toggle_fullscreen()
+        if self._win and on != self._fs:
+            self._fs = on
+            self._win.toggle_fullscreen()
 
 
 # 网页里的播放器全屏 → 整个窗口全屏
@@ -118,7 +119,7 @@ def main():
     api = Api()
     win = webview.create_window("妞妞影视", URL, width=1360, height=820, min_size=(900, 560),
                                 background_color="#0b0c10", js_api=api, text_select=False)
-    api.win = win
+    api._win = win
     win.events.loaded += lambda: win.evaluate_js(FS_JS)
     webview.start(gui="edgechromium", private_mode=False, storage_path=os.path.join(DATA, "webview"))
     os._exit(0)

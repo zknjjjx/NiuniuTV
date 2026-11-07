@@ -46,5 +46,5 @@ jobs:
           taskkill //F //IM "NiuniuWin-$V.exe" || true
           gh release upload v2-latest "dist/NiuniuWin-$V.exe" --clobber -R ${{ github.repository }}
           gh api repos/${{ github.repository }}/releases/tags/v2-latest --jq '.assets[] | "\(.id) \(.name)"' | while read id name; do
-            case "$name" in NiuniuWin-*.exe) [ "$name" != "NiuniuWin-$V.exe" ] && echo "删除 $name" && gh api -X DELETE repos/${{ github.repository }}/releases/assets/$id ;; esac
+            if [[ "$name" == NiuniuWin-*.exe && "$name" != "NiuniuWin-$V.exe" ]]; then echo "删除 $name"; gh api -X DELETE repos/${{ github.repository }}/releases/assets/$id; fi
           done
