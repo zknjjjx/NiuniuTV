@@ -20,6 +20,12 @@ if sys.stdout is None or sys.stderr is None:
     _f = open(os.path.join(DATA, "niuniu.log"), "a", encoding="utf-8", buffering=1)
     sys.stdout = sys.stdout or _f
     sys.stderr = sys.stderr or _f
+# Windows 控制台默认编码打不出中文（采集器打印会报 UnicodeEncodeError）
+for _s in (sys.stdout, sys.stderr):
+    try:
+        _s.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 
 
 def log(*a):
