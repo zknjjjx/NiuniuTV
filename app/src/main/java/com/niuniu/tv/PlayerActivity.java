@@ -293,6 +293,9 @@ public class PlayerActivity extends Activity {
     private boolean okDown = false;
     private long seekTarget = -1, seekHold = 0, seekLast = 0;
     private FrameLayout panel;
+    private LinearLayout keys;
+    private TextView kPrev, kNext;
+    private int keySel = -1;   // -1 未进入快捷键；0 上一集；1 下一集
     private ListView plist;
     private TextView tabEp, tabSrc;
     private View tabLine;
@@ -357,9 +360,25 @@ public class PlayerActivity extends Activity {
         bl.topMargin = dp(6);
         bottom.addView(bar, bl);
         tHint = tv(13, 0x73FFFFFF, "sans-serif");
-        tHint.setText("OK  暂停 / 继续        ◀ ▶  快退 / 快进        ▲  选集 · 换源        ▼  隐藏");
+        tHint.setText("OK  暂停 / 继续        ◀ ▶  快退 / 快进        ▲  选集 · 换源        ▼  上一集 / 下一集");
+        // 遥控器按 ▼ 出现的快捷键：上一集 / 下一集
+        keys = new LinearLayout(this);
+        keys.setGravity(Gravity.CENTER_VERTICAL);
+        kPrev = tv(15, 0xF2FFFFFF, "sans-serif"); kPrev.setText("上一集");
+        kNext = tv(15, 0xF2FFFFFF, "sans-serif"); kNext.setText("下一集");
+        for (TextView t : new TextView[]{kPrev, kNext}) {
+            t.setShadowLayer(0, 0, 0, 0);
+            t.setPadding(dp(20), dp(8), dp(20), dp(8));
+            LinearLayout.LayoutParams kl = new LinearLayout.LayoutParams(-2, -2);
+            kl.rightMargin = dp(12);
+            keys.addView(t, kl);
+        }
+        LinearLayout.LayoutParams kpl = new LinearLayout.LayoutParams(-2, -2);
+        kpl.topMargin = dp(12);
+        bottom.addView(keys, kpl);
+        keys.setVisibility(View.GONE);
         LinearLayout.LayoutParams hl = new LinearLayout.LayoutParams(-2, -2);
-        hl.topMargin = dp(8);
+        hl.topMargin = dp(10);
         bottom.addView(tHint, hl);
         root.addView(bottom, new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM));
 
@@ -406,8 +425,50 @@ public class PlayerActivity extends Activity {
         h.postDelayed(autoHide, 4500);
     }
 
+    private int epCount() { JSONArray a = eps(si); return a == null ? 0 : a.length(); }
+    private boolean canKey(int w) { return w == 0 ? ei > 0 : ei + 1 < epCount(); }
+
+    private void paintKeys() {
+        TextView[] ks = {kPrev, kNext};
+        for (int i = 0; i < 2; i++) {
+            boolean on = canKey(i), sel = keySel == i;
+            GradientDrawable g = new GradientDrawable();
+            g.setCornerRadius(dp(18));
+            g.setColor(sel ? 0x40FF6A3D : 0x1FFFFFFF);
+            g.setStroke(Math.max(1, dp(sel ? 2 : 1)), sel ? AC : 0x26FFFFFF);
+            ks[i].setBackground(g);
+            ks[i].setTextColor(on ? (sel ? 0xFFFFFFFF : 0xCCFFFFFF) : 0x4DFFFFFF);
+        }
+    }
+
+    private void enterKeys() {
+        int w = canKey(1) ? 1 : canKey(0) ? 0 : -1;
+        if (w < 0) { showStatus("只有这一集", 1500); showOsd(); return; }
+        keySel = w;
+        keys.setVisibility(View.VISIBLE);
+        paintKeys();
+        showOsd();
+    }
+
+    private void exitKeys() {
+        keySel = -1;
+        if (keys != null) keys.setVisibility(View.GONE);
+    }
+
+    private void jumpEp(int to) {
+        if (to < 0 || to >= epCount() || to == ei) return;
+        save();
+        ei = to;
+        failed.clear();
+        showStatus("播放 " + epName(), 2000);
+        load(0);
+        paintKeys();
+        showOsd();
+    }
+
     private void hideOsd() {
         h.removeCallbacks(autoHide);
+        exitKeys();
         if (!osdOn) return;
         osdOn = false;
         fade(top, false); fade(bottom, false); fade(tClock, false);
@@ -805,6 +866,34 @@ public class PlayerActivity extends Activity {
             }
             return super.dispatchKeyEvent(e);
         }
+        if (keySel >= 0) {   // 快捷键模式：◀ ▶ 选择，OK 执行，▲ / 返回 退出，▼ 收起
+            if (k == KeyEvent.KEYCODE_DPAD_LEFT || k == KeyEvent.KEYCODE_DPAD_RIGHT) {
+                if (down && e.getRepeatCount() == 0) {
+                    int w = k == KeyEvent.KEYCODE_DPAD_LEFT ? 0 : 1;
+                    if (canKey(w)) keySel = w;
+                    paintKeys();
+                    showOsd();
+                }
+                return true;
+            }
+            if (k == KeyEvent.KEYCODE_DPAD_CENTER || k == KeyEvent.KEYCODE_ENTER) {
+                if (down) { okDown = true; return true; }
+                if (!okDown) return true;
+                okDown = false;
+                jumpEp(keySel == 0 ? ei - 1 : ei + 1);
+                if (!canKey(keySel)) keySel = canKey(1 - keySel) ? 1 - keySel : keySel;
+                paintKeys();
+                return true;
+            }
+            if (k == KeyEvent.KEYCODE_DPAD_UP || k == KeyEvent.KEYCODE_BACK) {
+                if (!down) { exitKeys(); showOsd(); }
+                return true;
+            }
+            if (k == KeyEvent.KEYCODE_DPAD_DOWN) {
+                if (!down) hideOsd();
+                return true;
+            }
+        }
         if (k == KeyEvent.KEYCODE_BACK) {
             if (down) return true;
             if (seekTarget >= 0) { seekTarget = -1; tick(); return true; }
@@ -837,7 +926,15 @@ public class PlayerActivity extends Activity {
             }
             return true;
         }
-        if (k == KeyEvent.KEYCODE_DPAD_DOWN || k == KeyEvent.KEYCODE_INFO) {
+        if (k == KeyEvent.KEYCODE_MEDIA_NEXT || k == KeyEvent.KEYCODE_MEDIA_PREVIOUS) {
+            if (!down) jumpEp(k == KeyEvent.KEYCODE_MEDIA_NEXT ? ei + 1 : ei - 1);
+            return true;
+        }
+        if (k == KeyEvent.KEYCODE_DPAD_DOWN) {
+            if (!down) enterKeys();
+            return true;
+        }
+        if (k == KeyEvent.KEYCODE_INFO) {
             if (!down) { if (osdOn && player.getPlayWhenReady()) hideOsd(); else showOsd(); }
             return true;
         }
