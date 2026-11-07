@@ -8,8 +8,8 @@ android {
         applicationId 'com.niuniu.tv2'
         minSdk 21
         targetSdk 30
-        versionCode 28
-        versionName '2.6.6'
+        versionCode 29
+        versionName '2.7.0'
     }
     signingConfigs {
         niuniu {
@@ -19,6 +19,11 @@ android {
             keyAlias 'niuniu'
             keyPassword System.getenv('NN_KEY_PASS') ?: 'niuniutv'
         }
+    }
+    flavorDimensions 'dev'
+    productFlavors {
+        tv { dimension 'dev'; applicationId 'com.niuniu.tv2' }
+        phone { dimension 'dev'; applicationId 'com.niuniu.m' }
     }
     buildTypes {
         release {
@@ -32,7 +37,7 @@ android {
         targetCompatibility JavaVersion.VERSION_1_8
     }
     applicationVariants.all { v ->
-        v.outputs.all { outputFileName = "NiuniuTV-${v.versionName}.apk" }
+        v.outputs.all { outputFileName = (v.flavorName == 'phone' ? "NiuniuPhone" : "NiuniuTV") + "-${v.versionName}.apk" }
     }
 }
 

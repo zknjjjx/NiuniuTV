@@ -96,6 +96,7 @@ public class PlayerActivity extends Activity {
         root.addView(view, new FrameLayout.LayoutParams(-1, -1));
         buildOsd(root);
         setContentView(root);
+        if (Ui.phone(this)) touch(root);
 
         DefaultHttpDataSource.Factory http = new DefaultHttpDataSource.Factory()
                 .setUserAgent(Net.UA).setAllowCrossProtocolRedirects(true)
@@ -451,6 +452,99 @@ public class PlayerActivity extends Activity {
         seekTarget = -1;
         tick();
         showOsd();
+    }
+
+    // ---------------- 手机：触屏操作 ----------------
+    // 点一下显示/隐藏控制栏，双击暂停/继续，左右滑动快进快退（滑满一屏约 2 分钟），点进度条直接跳
+    private long dragBase = -1;
+    private void togglePlay() {
+        if (player == null) return;
+        player.setPlayWhenReady(!player.getPlayWhenReady());
+        showOsd(); refreshCenter();
+    }
+    private void touch(FrameLayout root) {
+        tHint.setVisibility(View.GONE);
+        LinearLayout acts = new LinearLayout(this);
+        acts.setGravity(Gravity.CENTER_VERTICAL);
+        final TextView bPlay = pill("暂停");
+        final TextView bEp = pill("选集"), bSrc = pill("换源"), bBack = pill("返回");
+        acts.addView(bBack);
+        View sp = new View(this);
+        acts.addView(sp, new LinearLayout.LayoutParams(0, 1, 1f));
+        acts.addView(bPlay); acts.addView(bEp); acts.addView(bSrc);
+        LinearLayout.LayoutParams al = new LinearLayout.LayoutParams(-1, -2);
+        al.topMargin = dp(6);
+        bottom.addView(acts, al);
+        bottom.setPadding(dp(28), dp(60), dp(28), dp(16));
+        top.setPadding(dp(28), dp(20), dp(28), dp(50));
+        ((FrameLayout.LayoutParams) tClock.getLayoutParams()).rightMargin = dp(28);
+        ((FrameLayout.LayoutParams) tClock.getLayoutParams()).topMargin = dp(18);
+        bBack.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { save(); finish(); } });
+        bPlay.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { togglePlay(); } });
+        bEp.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { showPanel(0); } });
+        bSrc.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { showPanel(1); } });
+        h.post(new Runnable() { public void run() {
+            if (player != null) bPlay.setText(player.getPlayWhenReady() ? "暂停" : "播放");
+            h.postDelayed(this, 500);
+        } });
+        tabEp.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { tab = 0; fillPanel(); kickPanelIdle(); } });
+        tabSrc.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { tab = 1; fillPanel(); kickPanelIdle(); } });
+        bar.setOnTouchListener(new View.OnTouchListener() {
+            public boolean onTouch(View v, android.view.MotionEvent e) {
+                long dur = player == null ? 0 : player.getDuration();
+                if (dur <= 0 || dur == C.TIME_UNSET) return false;
+                float f = Math.max(0, Math.min(1, e.getX() / Math.max(1, v.getWidth())));
+                seekTarget = (long) (f * dur);
+                showOsd(); tick();
+                int a = e.getActionMasked();
+                if (a == android.view.MotionEvent.ACTION_UP || a == android.view.MotionEvent.ACTION_CANCEL) commitSeek();
+                return true;
+            }
+        });
+        final android.view.GestureDetector gd = new android.view.GestureDetector(this, new android.view.GestureDetector.SimpleOnGestureListener() {
+            @Override public boolean onDown(android.view.MotionEvent e) { return true; }
+            @Override public boolean onSingleTapConfirmed(android.view.MotionEvent e) {
+                if (panelOn()) hidePanel();
+                else if (osdOn && player != null && player.getPlayWhenReady()) hideOsd();
+                else showOsd();
+                return true;
+            }
+            @Override public boolean onDoubleTap(android.view.MotionEvent e) { if (!panelOn()) togglePlay(); return true; }
+            @Override public boolean onScroll(android.view.MotionEvent a, android.view.MotionEvent b, float dx, float dy) {
+                if (a == null || panelOn() || player == null) return false;
+                float mx = b.getX() - a.getX();
+                if (dragBase < 0) { if (Math.abs(mx) < dp(16) || Math.abs(mx) < Math.abs(b.getY() - a.getY())) return false; dragBase = player.getCurrentPosition(); }
+                long dur = player.getDuration();
+                long t = dragBase + (long) (mx / Math.max(1, root.getWidth()) * 120000);
+                if (t < 0) t = 0;
+                if (dur > 0 && dur != C.TIME_UNSET && t > dur - 3000) t = Math.max(0, dur - 3000);
+                seekTarget = t;
+                showOsd(); tick();
+                return true;
+            }
+        });
+        root.setOnTouchListener(new View.OnTouchListener() {
+            public boolean onTouch(View v, android.view.MotionEvent e) {
+                gd.onTouchEvent(e);
+                int a = e.getActionMasked();
+                if ((a == android.view.MotionEvent.ACTION_UP || a == android.view.MotionEvent.ACTION_CANCEL) && dragBase >= 0) { dragBase = -1; commitSeek(); }
+                return true;
+            }
+        });
+    }
+    private TextView pill(String s) {
+        TextView t = tv(15, 0xF2FFFFFF, "sans-serif");
+        t.setText(s);
+        t.setPadding(dp(16), dp(8), dp(16), dp(8));
+        GradientDrawable g = new GradientDrawable();
+        g.setColor(0x33FFFFFF);
+        g.setCornerRadius(dp(18));
+        t.setBackground(g);
+        t.setClickable(true);
+        LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(-2, -2);
+        l.leftMargin = dp(10);
+        t.setLayoutParams(l);
+        return t;
     }
 
     // ---------------- 侧边选集 / 换源面板 ----------------

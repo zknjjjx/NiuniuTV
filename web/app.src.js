@@ -6,6 +6,8 @@ const $$ = (s, el = document) => Array.prototype.slice.call(el.querySelectorAll(
 const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const APP = typeof window.NN !== "undefined";
+// 手机版：同一套界面，改成触屏操作、原生滚动
+const MOB = APP ? !!(NN.phone && NN.phone()) : /[?&]m=1/.test(location.search);
 
 /* ---------------- 基础：请求 / 测速 ---------------- */
 let seq = 0;
@@ -209,6 +211,7 @@ const F = {
   hold: null,  // 菜单预览中：页面加载时不抢焦点
   set(el, quiet) {
     if (!el) return;
+    if (MOB) { F.prev = F.cur; F.cur = el; return; }
     if (F.hold && !F.user && !el.closest("#top") && !el.closest("#layer")) return;
     if (F.hold && !el.closest("#top")) F.hold = null;
     if (F.cur) F.cur.classList.remove("focus");
@@ -338,7 +341,9 @@ const F = {
 };
 let remPx = 20;
 const rem = () => remPx;
-function fit() { remPx = window.innerWidth / 74; document.documentElement.style.fontSize = remPx + "px"; }
+function fit() {
+  if (MOB) { remPx = Math.min(window.innerWidth, 640) / 24; document.documentElement.style.fontSize = remPx + "px"; const t = $("#top"); if (t) $("#page").style.top = t.offsetHeight + "px"; return; }
+  remPx = window.innerWidth / 74; document.documentElement.style.fontSize = remPx + "px"; }
 
 /* 背景氛围图 */
 let bgI = 0, bgUrl = "";
@@ -357,7 +362,7 @@ const TABS = [["home", "首页"], ["movie", "电影"], ["tv", "剧集"], ["anime
 const stack = [];
 let route = null, routeTok = 0;
 function go(name, arg, replace) {
-  if (route && !replace) stack.push({ name: route.name, arg: route.arg, focus: F.cur, y: ($(".scroll") || {})._y });
+  if (route && !replace) stack.push({ name: route.name, arg: route.arg, focus: F.cur, y: ($(".scroll") || {})._y, sy: $("#page").scrollTop });
   route = { name, arg };
   render(name, arg);
 }
@@ -369,11 +374,22 @@ function render(name, arg, restore) {
   $("#top").classList.remove("hide");
   if (name !== "detail") clearBg();
   const fn = PAGES[name];
+  if (MOB) {
+    const pg = $("#page"); pg._more = null; pg.scrollTop = 0;
+    if (restore && restore.sy) [80, 400, 1200].forEach(t => setTimeout(() => { if (route && route.name === name) pg.scrollTop = restore.sy; }, t));
+    const tab = $("#tabs .tab.on"); if (tab && tab.scrollIntoView) { const tb = $("#tabs"); tb.scrollLeft = Math.max(0, tab.offsetLeft - tb.clientWidth / 2 + tab.offsetWidth / 2); }
+  }
   if (!F.hold) { if (F.cur) F.cur.classList.remove("focus"); F.cur = null; }
   fn(routeTok, arg, restore);
 }
 window.nnBack = function () {
   if ($("#layer").classList.contains("on")) { closeLayer(); return true; }
+  if (MOB) {
+    const inp = document.activeElement; if (inp && inp.tagName === "INPUT") { inp.blur(); return true; }
+    if (stack.length) { const p = stack.pop(); route = { name: p.name, arg: p.arg }; render(p.name, p.arg, p); return true; }
+    if (route && route.name !== "home") { route = { name: "home" }; render("home"); return true; }
+    return false;
+  }
   if (stack.length) {
     const p = stack.pop();
     route = { name: p.name, arg: p.arg };
@@ -551,6 +567,7 @@ const PAGES = {
       ch._ok = () => { clearTimeout(pick._t); pick(ch); const c = $("#grid .card.f"); if (c) F.set(c); };
     });
     F.set($(".chip.on"));
+    $("#page")._more = () => load();
     load(true);
   },
 
@@ -564,6 +581,7 @@ const PAGES = {
       <div id="castRow"></div></div>
       <aside class="epcol" id="epsSec" style="display:none"><h3>选集 <small id="epsInfo"></small></h3><div class="epvp"><div class="eps" data-g="eps"></div></div></aside>`;
     F.set($("#bPlay"));
+    if (MOB) { const dt = $(".dt"); [".crew", ".intro", ".acts", ".srcline"].forEach(s => dt.appendChild($(s, dt))); $(".dtwrap").insertBefore($("#epsSec"), $("#castRow")); }
     const key = histKey({ id: it.id, type: kind, title: it.title });
     const st = { srcs: [], done: false, probing: 0, probed: 0 };
     let meta = { title: it.title, year: it.year, pic: it.pic };
@@ -686,14 +704,16 @@ const PAGES = {
   search(tok, q) {
     // 仿 TVBox：左侧字母键盘，按拼音首字母搜（爱奇艺联想接口支持首字母），中文/语音走豆瓣
     const KEYS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890".split("");
-    $("#page").innerHTML = `<div class="skb"><div class="sq" id="sq"><span id="sqt"></span><i>拼音首字母，如 XCLF</i></div>
+    if (MOB) $("#page").innerHTML = `<div class="scroll srch"><div class="sbox">${ICON_SEARCH}<input id="q" type="search" placeholder="片名、演员，或拼音首字母如 XCLF" enterkeyhint="search"></div>
+      <div class="pagehead sec"><h2 id="sh">大家都在看</h2><span id="ss"></span></div><div id="sres"></div></div>`;
+    else $("#page").innerHTML = `<div class="skb"><div class="sq" id="sq"><span id="sqt"></span><i>拼音首字母，如 XCLF</i></div>
       <div class="keys" data-g="kb">${KEYS.map(k => `<div class="key f" data-k="${k}">${k}</div>`).join("")}
       <div class="key f wide" data-k="clr">清空</div><div class="key f wide" data-k="del">删除</div><div class="key f wide" data-k="ime">输入法</div></div>
       <input id="q" class="imeq" value=""></div>
       <div class="scroll srch" data-pad="6"><div class="pagehead sec"><h2 id="sh">大家都在看</h2><span id="ss"></span></div><div id="sres"></div></div>`;
     const input = $("#q");
     let text = q || "", timer = 0, my = 0;
-    const show = () => { $("#sqt").textContent = text; $("#sq").classList.toggle("has", !!text); };
+    const show = () => { if (MOB) { if (input.value !== text) input.value = text; return; } $("#sqt").textContent = text; $("#sq").classList.toggle("has", !!text); };
     const isLetters = v => /^[a-z0-9]+$/i.test(v);
     const grid = items => `<div class="grid">${items.map(it => card(it, { sub: it.sub, cls: "grid-item" })).join("")}</div>`;
     const cidType = c => (c === 1 ? "movie" : "tv");
@@ -749,8 +769,15 @@ const PAGES = {
         show(); later();
       };
     });
-    input.addEventListener("keydown", e => { if (e.keyCode === 13) { e.preventDefault(); text = input.value.trim(); input.blur(); show(); run(); F.set($(".skb .key")); } });
-    input.addEventListener("blur", () => { if (input.value.trim() && input.value.trim() !== text) { text = input.value.trim(); show(); run(); } });
+    if (!MOB) input.addEventListener("keydown", e => { if (e.keyCode === 13) { e.preventDefault(); text = input.value.trim(); input.blur(); show(); run(); F.set($(".skb .key")); } });
+    if (!MOB) input.addEventListener("blur", () => { if (input.value.trim() && input.value.trim() !== text) { text = input.value.trim(); show(); run(); } });
+    if (MOB) {
+      input.addEventListener("input", () => { text = input.value.trim(); later(); });
+      input.addEventListener("keydown", e => { if (e.keyCode === 13) { e.preventDefault(); text = input.value.trim(); input.blur(); run(); } });
+      show();
+      if (text) run(); else { hot(); setTimeout(() => input.focus(), 300); }
+      return;
+    }
     show();
     F.set($(".skb .key"));
     if (text) run(); else hot();
@@ -758,7 +785,7 @@ const PAGES = {
 
   history(tok) {
     const list = histAll();
-    $("#page").innerHTML = `<div class="scroll" data-pad="6"><div class="pagehead sec"><h2>观看记录</h2><span>${list.length ? "按菜单键删除当前这条" : ""}</span></div>
+    $("#page").innerHTML = `<div class="scroll" data-pad="6"><div class="pagehead sec"><h2>观看记录</h2><span>${list.length ? (MOB ? "长按删除" : "按菜单键删除当前这条") : ""}</span></div>
       <div class="grid">${list.length ? list.map(h => histCard(h, "grid-item")).join("") : `<div class="empty">还没有看过的片子</div>`}</div></div>`;
     bindCards($("#page"));
     $$("#page .card").forEach((c, i) => { c._menu = () => { if (APP) NN.delHistory(list[i].key); toast("已删除"); render("history"); }; });
@@ -778,7 +805,7 @@ const PAGES = {
       <div class="setrow f" id="sUpd"><span>检查更新</span><small id="sUpdS">当前 ${APP ? esc(NN.version()) : "dev"}${UPD.latest ? (hasNew() ? ` · 有新版 ${esc(UPD.latest.version)}，按 OK 升级` : " · 已是最新") : ""}</small></div>
       <div class="setrow f" id="sApk"><span>安装包残留</span><small id="sApkS">${(() => { let a = { n: 0 }; try { a = APP && NN.apkInfo ? JSON.parse(NN.apkInfo()) : a; } catch (e) {} return a.n ? `${a.n} 个 · ${a.mb} MB，按 OK 删除` : "没有残留，已全部删除"; })()}</small></div>
       <div class="setrow f" id="sClear"><span>清除观看记录</span><small>${histAll().length} 条</small></div>
-      <div class="setrow info"><span>播放说明</span><small>自动测速挑最快源；起播 12 秒没画面或卡住 20 秒自动换源；播放中按 ▲ 选集换源</small></div></div>`;
+      <div class="setrow info"><span>播放说明</span><small>${MOB ? "自动测速挑最快源；起播 12 秒没画面或卡住 20 秒自动换源；播放时点屏幕出控制栏，左右滑动快进快退，双击暂停" : "自动测速挑最快源；起播 12 秒没画面或卡住 20 秒自动换源；播放中按 ▲ 选集换源"}</small></div></div>`;
     $("#sRefresh")._ok = async () => { toast("正在刷新片源…"); await loadSources(true); toast(`片源已更新：${SRC.list.length} 个`); render("settings"); };
     $("#sUrl")._ok = () => {
       openLayer(`<div class="panel"><h2>片源地址</h2><p style="opacity:.7">支持 cmstv.json 或 TVBox 配置（只用里面的采集站）。GitHub 地址会自动走加速。</p>
@@ -805,12 +832,13 @@ let resolving = null;
 
 /* ---------------- 在线升级：读 GitHub Release v2-latest 里的 latest.json ---------------- */
 const REL = "https://github.com/zknjjjx/NiuniuTV/releases/download/v2-latest/";
+const UPD_JSON = MOB ? "latest-m.json" : "latest.json";
 const relMirrors = f => [`https://ghfast.top/${REL}${f}`, `https://gh-proxy.com/${REL}${f}`, REL + f];
 const verNum = v => String(v || "0").split(".").reduce((a, x) => a * 1000 + (parseInt(x, 10) || 0), 0);
 const UPD = { latest: null, checking: null };
 function checkUpdate() {
   if (UPD.checking) return UPD.checking;
-  UPD.checking = anyOf(relMirrors("latest.json?t=" + Date.now()).map(u => getJSON(u, null, 12000).then(j => { if (!j || !j.version || !j.apk) throw new Error("bad"); return j; })))
+  UPD.checking = anyOf(relMirrors(UPD_JSON + "?t=" + Date.now()).map(u => getJSON(u, null, 12000).then(j => { if (!j || !j.version || !j.apk) throw new Error("bad"); return j; })))
     .then(j => { UPD.latest = j; UPD.checking = null; return j; }, e => { UPD.checking = null; throw e; });
   return UPD.checking;
 }
@@ -882,6 +910,7 @@ window.nnMenu = () => { if (F.cur && F.cur._menu) F.cur._menu(); };
 /* ---------------- 启动 ---------------- */
 function clock() { const d = new Date(); $("#clock").textContent = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; }
 function boot() {
+  if (MOB) document.body.classList.add("mob");
   fit();
   if (cfg.get("fx", "1") === "0") document.body.classList.add("nofx");
   window.addEventListener("resize", fit);
@@ -897,11 +926,30 @@ function boot() {
     };
     t._ok = () => {
       const k = t.dataset.k;
-      if (!route || route.name !== (k in CHIPS ? "cat" : k) || stack.length) { open(false); return; }
+      if (MOB || !route || route.name !== (k in CHIPS ? "cat" : k) || stack.length) { open(false); return; }
       F.hold = null; const c = $("#page .f.focus") || $("#page .card.f") || $("#page .f"); if (route && route.name !== "search" && c) F.set(c); else open(false); };
     t._onfocus = () => { if (!(F.prev && F.prev.closest("#tabs"))) return; clearTimeout(open._t); open._t = setTimeout(() => { if (F.cur === t) open(true); }, 280); };
   });
   clock(); setInterval(clock, 20000);
+  if (MOB) {
+    fit();
+    const pg = $("#page");
+    pg.addEventListener("scroll", () => { if (pg._more && pg.scrollTop + pg.clientHeight > pg.scrollHeight - pg.clientHeight * 1.5) pg._more(); });
+    document.addEventListener("click", e => {
+      const l = $("#layer");
+      if (e.target === l) { closeLayer(); return; }
+      const el = e.target.closest ? e.target.closest(".f") : null;
+      if (!el || el.tagName === "INPUT" || el.closest(".sbox")) return;
+      if (l.classList.contains("on") && !el.closest("#layer")) return;
+      F.cur = el;
+      if (el._ok) el._ok();
+    });
+    document.addEventListener("contextmenu", e => {
+      e.preventDefault();
+      const el = e.target.closest ? e.target.closest(".f") : null;
+      if (el && el._menu) el._menu();
+    });
+  }
   loadSources();
   route = { name: "home" };
   autoUpdate();

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+    <application>
+        <activity android:name="com.niuniu.tv.MainActivity" android:screenOrientation="portrait" tools:replace="android:screenOrientation" />
+        <activity android:name="com.niuniu.tv.PlayerActivity" android:screenOrientation="sensorLandscape" tools:replace="android:screenOrientation" />
+    </application>
+</manifest>

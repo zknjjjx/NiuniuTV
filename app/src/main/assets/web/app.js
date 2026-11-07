@@ -24,6 +24,7 @@ const $$ = (s, el = document) => Array.prototype.slice.call(el.querySelectorAll(
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const APP = typeof window.NN !== "undefined";
+const MOB = APP ? !!(NN.phone && NN.phone()) : /[?&]m=1/.test(location.search);
 let seq = 0;
 const cbs = {};
 window.__nnCb = (id, code, body, ms) => {
@@ -338,6 +339,11 @@ const F = {
   // 菜单预览中：页面加载时不抢焦点
   set(el, quiet) {
     if (!el) return;
+    if (MOB) {
+      F.prev = F.cur;
+      F.cur = el;
+      return;
+    }
     if (F.hold && !F.user && !el.closest("#top") && !el.closest("#layer")) return;
     if (F.hold && !el.closest("#top")) F.hold = null;
     if (F.cur) F.cur.classList.remove("focus");
@@ -513,6 +519,13 @@ const F = {
 let remPx = 20;
 const rem = () => remPx;
 function fit() {
+  if (MOB) {
+    remPx = Math.min(window.innerWidth, 640) / 24;
+    document.documentElement.style.fontSize = remPx + "px";
+    const t = $("#top");
+    if (t) $("#page").style.top = t.offsetHeight + "px";
+    return;
+  }
   remPx = window.innerWidth / 74;
   document.documentElement.style.fontSize = remPx + "px";
 }
@@ -540,7 +553,7 @@ const TABS = [["home", "\u9996\u9875"], ["movie", "\u7535\u5F71"], ["tv", "\u526
 const stack = [];
 let route = null, routeTok = 0;
 function go(name, arg, replace) {
-  if (route && !replace) stack.push({ name: route.name, arg: route.arg, focus: F.cur, y: ($(".scroll") || {})._y });
+  if (route && !replace) stack.push({ name: route.name, arg: route.arg, focus: F.cur, y: ($(".scroll") || {})._y, sy: $("#page").scrollTop });
   route = { name, arg };
   render(name, arg);
 }
@@ -555,6 +568,19 @@ function render(name, arg, restore) {
   $("#top").classList.remove("hide");
   if (name !== "detail") clearBg();
   const fn = PAGES[name];
+  if (MOB) {
+    const pg = $("#page");
+    pg._more = null;
+    pg.scrollTop = 0;
+    if (restore && restore.sy) [80, 400, 1200].forEach((t) => setTimeout(() => {
+      if (route && route.name === name) pg.scrollTop = restore.sy;
+    }, t));
+    const tab = $("#tabs .tab.on");
+    if (tab && tab.scrollIntoView) {
+      const tb = $("#tabs");
+      tb.scrollLeft = Math.max(0, tab.offsetLeft - tb.clientWidth / 2 + tab.offsetWidth / 2);
+    }
+  }
   if (!F.hold) {
     if (F.cur) F.cur.classList.remove("focus");
     F.cur = null;
@@ -565,6 +591,25 @@ window.nnBack = function() {
   if ($("#layer").classList.contains("on")) {
     closeLayer();
     return true;
+  }
+  if (MOB) {
+    const inp = document.activeElement;
+    if (inp && inp.tagName === "INPUT") {
+      inp.blur();
+      return true;
+    }
+    if (stack.length) {
+      const p = stack.pop();
+      route = { name: p.name, arg: p.arg };
+      render(p.name, p.arg, p);
+      return true;
+    }
+    if (route && route.name !== "home") {
+      route = { name: "home" };
+      render("home");
+      return true;
+    }
+    return false;
   }
   if (stack.length) {
     const p = stack.pop();
@@ -848,6 +893,7 @@ const PAGES = {
       };
     });
     F.set($(".chip.on"));
+    $("#page")._more = () => load();
     load(true);
   },
   detail(tok, it, restore) {
@@ -861,6 +907,11 @@ const PAGES = {
       <div id="castRow"></div></div>
       <aside class="epcol" id="epsSec" style="display:none"><h3>\u9009\u96C6 <small id="epsInfo"></small></h3><div class="epvp"><div class="eps" data-g="eps"></div></div></aside>`;
       F.set($("#bPlay"));
+      if (MOB) {
+        const dt = $(".dt");
+        [".crew", ".intro", ".acts", ".srcline"].forEach((s) => dt.appendChild($(s, dt)));
+        $(".dtwrap").insertBefore($("#epsSec"), $("#castRow"));
+      }
       const key = histKey({ id: it.id, type: kind, title: it.title });
       const st = { srcs: [], done: false, probing: 0, probed: 0 };
       let meta = { title: it.title, year: it.year, pic: it.pic };
@@ -1045,7 +1096,9 @@ const PAGES = {
   },
   search(tok, q) {
     const KEYS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890".split("");
-    $("#page").innerHTML = `<div class="skb"><div class="sq" id="sq"><span id="sqt"></span><i>\u62FC\u97F3\u9996\u5B57\u6BCD\uFF0C\u5982 XCLF</i></div>
+    if (MOB) $("#page").innerHTML = `<div class="scroll srch"><div class="sbox">${ICON_SEARCH}<input id="q" type="search" placeholder="\u7247\u540D\u3001\u6F14\u5458\uFF0C\u6216\u62FC\u97F3\u9996\u5B57\u6BCD\u5982 XCLF" enterkeyhint="search"></div>
+      <div class="pagehead sec"><h2 id="sh">\u5927\u5BB6\u90FD\u5728\u770B</h2><span id="ss"></span></div><div id="sres"></div></div>`;
+    else $("#page").innerHTML = `<div class="skb"><div class="sq" id="sq"><span id="sqt"></span><i>\u62FC\u97F3\u9996\u5B57\u6BCD\uFF0C\u5982 XCLF</i></div>
       <div class="keys" data-g="kb">${KEYS.map((k) => `<div class="key f" data-k="${k}">${k}</div>`).join("")}
       <div class="key f wide" data-k="clr">\u6E05\u7A7A</div><div class="key f wide" data-k="del">\u5220\u9664</div><div class="key f wide" data-k="ime">\u8F93\u5165\u6CD5</div></div>
       <input id="q" class="imeq" value=""></div>
@@ -1053,6 +1106,10 @@ const PAGES = {
     const input = $("#q");
     let text = q || "", timer = 0, my = 0;
     const show = () => {
+      if (MOB) {
+        if (input.value !== text) input.value = text;
+        return;
+      }
       $("#sqt").textContent = text;
       $("#sq").classList.toggle("has", !!text);
     };
@@ -1131,7 +1188,7 @@ const PAGES = {
         later();
       };
     });
-    input.addEventListener("keydown", (e) => {
+    if (!MOB) input.addEventListener("keydown", (e) => {
       if (e.keyCode === 13) {
         e.preventDefault();
         text = input.value.trim();
@@ -1141,13 +1198,34 @@ const PAGES = {
         F.set($(".skb .key"));
       }
     });
-    input.addEventListener("blur", () => {
+    if (!MOB) input.addEventListener("blur", () => {
       if (input.value.trim() && input.value.trim() !== text) {
         text = input.value.trim();
         show();
         run();
       }
     });
+    if (MOB) {
+      input.addEventListener("input", () => {
+        text = input.value.trim();
+        later();
+      });
+      input.addEventListener("keydown", (e) => {
+        if (e.keyCode === 13) {
+          e.preventDefault();
+          text = input.value.trim();
+          input.blur();
+          run();
+        }
+      });
+      show();
+      if (text) run();
+      else {
+        hot();
+        setTimeout(() => input.focus(), 300);
+      }
+      return;
+    }
     show();
     F.set($(".skb .key"));
     if (text) run();
@@ -1155,7 +1233,7 @@ const PAGES = {
   },
   history(tok) {
     const list = histAll();
-    $("#page").innerHTML = `<div class="scroll" data-pad="6"><div class="pagehead sec"><h2>\u89C2\u770B\u8BB0\u5F55</h2><span>${list.length ? "\u6309\u83DC\u5355\u952E\u5220\u9664\u5F53\u524D\u8FD9\u6761" : ""}</span></div>
+    $("#page").innerHTML = `<div class="scroll" data-pad="6"><div class="pagehead sec"><h2>\u89C2\u770B\u8BB0\u5F55</h2><span>${list.length ? MOB ? "\u957F\u6309\u5220\u9664" : "\u6309\u83DC\u5355\u952E\u5220\u9664\u5F53\u524D\u8FD9\u6761" : ""}</span></div>
       <div class="grid">${list.length ? list.map((h) => histCard(h, "grid-item")).join("") : `<div class="empty">\u8FD8\u6CA1\u6709\u770B\u8FC7\u7684\u7247\u5B50</div>`}</div></div>`;
     bindCards($("#page"));
     $$("#page .card").forEach((c, i) => {
@@ -1192,7 +1270,7 @@ const PAGES = {
         return a.n ? `${a.n} \u4E2A \xB7 ${a.mb} MB\uFF0C\u6309 OK \u5220\u9664` : "\u6CA1\u6709\u6B8B\u7559\uFF0C\u5DF2\u5168\u90E8\u5220\u9664";
       })()}</small></div>
       <div class="setrow f" id="sClear"><span>\u6E05\u9664\u89C2\u770B\u8BB0\u5F55</span><small>${histAll().length} \u6761</small></div>
-      <div class="setrow info"><span>\u64AD\u653E\u8BF4\u660E</span><small>\u81EA\u52A8\u6D4B\u901F\u6311\u6700\u5FEB\u6E90\uFF1B\u8D77\u64AD 12 \u79D2\u6CA1\u753B\u9762\u6216\u5361\u4F4F 20 \u79D2\u81EA\u52A8\u6362\u6E90\uFF1B\u64AD\u653E\u4E2D\u6309 \u25B2 \u9009\u96C6\u6362\u6E90</small></div></div>`;
+      <div class="setrow info"><span>\u64AD\u653E\u8BF4\u660E</span><small>${MOB ? "\u81EA\u52A8\u6D4B\u901F\u6311\u6700\u5FEB\u6E90\uFF1B\u8D77\u64AD 12 \u79D2\u6CA1\u753B\u9762\u6216\u5361\u4F4F 20 \u79D2\u81EA\u52A8\u6362\u6E90\uFF1B\u64AD\u653E\u65F6\u70B9\u5C4F\u5E55\u51FA\u63A7\u5236\u680F\uFF0C\u5DE6\u53F3\u6ED1\u52A8\u5FEB\u8FDB\u5FEB\u9000\uFF0C\u53CC\u51FB\u6682\u505C" : "\u81EA\u52A8\u6D4B\u901F\u6311\u6700\u5FEB\u6E90\uFF1B\u8D77\u64AD 12 \u79D2\u6CA1\u753B\u9762\u6216\u5361\u4F4F 20 \u79D2\u81EA\u52A8\u6362\u6E90\uFF1B\u64AD\u653E\u4E2D\u6309 \u25B2 \u9009\u96C6\u6362\u6E90"}</small></div></div>`;
       $("#sRefresh")._ok = () => __async(this, null, function* () {
         toast("\u6B63\u5728\u5237\u65B0\u7247\u6E90\u2026");
         yield loadSources(true);
@@ -1255,12 +1333,13 @@ const PAGES = {
 };
 let resolving = null;
 const REL = "https://github.com/zknjjjx/NiuniuTV/releases/download/v2-latest/";
+const UPD_JSON = MOB ? "latest-m.json" : "latest.json";
 const relMirrors = (f) => [`https://ghfast.top/${REL}${f}`, `https://gh-proxy.com/${REL}${f}`, REL + f];
 const verNum = (v) => String(v || "0").split(".").reduce((a, x) => a * 1e3 + (parseInt(x, 10) || 0), 0);
 const UPD = { latest: null, checking: null };
 function checkUpdate() {
   if (UPD.checking) return UPD.checking;
-  UPD.checking = anyOf(relMirrors("latest.json?t=" + Date.now()).map((u) => getJSON(u, null, 12e3).then((j) => {
+  UPD.checking = anyOf(relMirrors(UPD_JSON + "?t=" + Date.now()).map((u) => getJSON(u, null, 12e3).then((j) => {
     if (!j || !j.version || !j.apk) throw new Error("bad");
     return j;
   }))).then((j) => {
@@ -1353,6 +1432,7 @@ function clock() {
   $("#clock").textContent = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 function boot() {
+  if (MOB) document.body.classList.add("mob");
   fit();
   if (cfg.get("fx", "1") === "0") document.body.classList.add("nofx");
   window.addEventListener("resize", fit);
@@ -1368,7 +1448,7 @@ function boot() {
     };
     t._ok = () => {
       const k = t.dataset.k;
-      if (!route || route.name !== (k in CHIPS ? "cat" : k) || stack.length) {
+      if (MOB || !route || route.name !== (k in CHIPS ? "cat" : k) || stack.length) {
         open(false);
         return;
       }
@@ -1387,6 +1467,30 @@ function boot() {
   });
   clock();
   setInterval(clock, 2e4);
+  if (MOB) {
+    fit();
+    const pg = $("#page");
+    pg.addEventListener("scroll", () => {
+      if (pg._more && pg.scrollTop + pg.clientHeight > pg.scrollHeight - pg.clientHeight * 1.5) pg._more();
+    });
+    document.addEventListener("click", (e) => {
+      const l = $("#layer");
+      if (e.target === l) {
+        closeLayer();
+        return;
+      }
+      const el = e.target.closest ? e.target.closest(".f") : null;
+      if (!el || el.tagName === "INPUT" || el.closest(".sbox")) return;
+      if (l.classList.contains("on") && !el.closest("#layer")) return;
+      F.cur = el;
+      if (el._ok) el._ok();
+    });
+    document.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      const el = e.target.closest ? e.target.closest(".f") : null;
+      if (el && el._menu) el._menu();
+    });
+  }
   loadSources();
   route = { name: "home" };
   autoUpdate();

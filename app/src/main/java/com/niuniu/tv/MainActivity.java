@@ -31,6 +31,7 @@ public class MainActivity extends Activity {
     private final ExecutorService dbPool = Executors.newFixedThreadPool(6);  // 豆瓣单独排队，不被片源搜索堵住
     private long lastBack = 0;
     private Lan lan;
+    private boolean phone;
 
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
     @Override
@@ -77,8 +78,14 @@ public class MainActivity extends Activity {
             }
         });
         Upd.cleanup(this, true);  // 升级装完重启、或上次推送的安装包，一律清掉
-        lan = new Lan(this, new Lan.Js() { public void run(String code) { js(code); } });
-        lan.start();
+        phone = Ui.phone(this);
+        if (phone) {  // 手机：保留状态栏，不开局域网推送
+            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+            if (Build.VERSION.SDK_INT >= 21) { getWindow().setStatusBarColor(Color.parseColor("#0B0C10")); getWindow().setNavigationBarColor(Color.parseColor("#0B0C10")); }
+        } else {
+            lan = new Lan(this, new Lan.Js() { public void run(String code) { js(code); } });
+            lan.start();
+        }
         setContentView(web);
         web.requestFocus();
         web.loadUrl("file:///android_asset/web/index.html");
@@ -156,6 +163,9 @@ public class MainActivity extends Activity {
         public int apkClean() { return Upd.cleanup(MainActivity.this, true); }
 
         @JavascriptInterface
+        public boolean phone() { return phone; }
+
+        @JavascriptInterface
         public String version() { return BuildConfigVersion.NAME; }
 
         /** 在线升级：urls 为 JSON 数组，按顺序尝试；进度和失败通过 nnUpg 回调 */
@@ -197,7 +207,7 @@ public class MainActivity extends Activity {
         if (web != null) { web.onResume(); web.resumeTimers(); }
         Upd.cleanup(this, false);  // 从安装界面回来（装好或取消）即删安装包
         if (web != null) web.evaluateJavascript("window.nnResume&&nnResume()", null);
-        hideBars();
+        if (!phone) hideBars();
     }
 
     private void hideBars() {

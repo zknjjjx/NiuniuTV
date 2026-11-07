@@ -326,3 +326,100 @@ body:not(.poster) #bg .aur{background:radial-gradient(42% 34% at 16% 14%,rgba(25
 .cathead h2{margin-right:2.6rem}
 .cathead .chips{padding:0;flex-wrap:nowrap}
 .cathead .chip{margin-bottom:0}
+
+/* ======== 手机版（body.mob）：竖屏、触屏、原生滚动 ======== */
+body.mob{-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none}
+.mob #bg{background:#0d0f16 url(wall.jpg) 30% 0/auto 100% no-repeat}
+.mob #bg .bgl,.mob #bg .vig{display:none}
+.mob #top{height:auto;padding:.55rem .8rem .55rem .7rem;background:rgba(11,12,16,.94);border-bottom:1px solid rgba(255,255,255,.06)}
+.mob #top:before{display:none}
+.mob #top.hide{transform:none;opacity:1}
+.mob .brand{margin-right:.6rem;flex:0 0 auto}
+.mob .brand img{width:2.1rem;height:2.1rem;margin-right:.3rem}
+.mob .brand span{font-size:1.1rem}
+.mob #clock{display:none}
+.mob #tabs{flex:1;min-width:0;overflow-x:auto;padding:.2rem;scrollbar-width:none}
+.mob #tabs::-webkit-scrollbar{display:none}
+.mob .tab{flex:0 0 auto;font-size:.95rem;padding:.35rem .8rem;white-space:nowrap}
+.mob .tab+.tab{margin-left:.15rem}
+.mob .tab.dot::after{top:.2rem;right:.3rem;width:.4rem;height:.4rem}
+.mob #page{top:3.4rem;overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.mob .f:active{opacity:.65}
+.mob .scroll{position:static;transform:none!important;transition:none;will-change:auto}
+.mob .row.past,.mob .row.far{visibility:visible}
+.mob .home>div:first-child{height:.9rem!important}
+.mob .row{padding-bottom:1.2rem}
+.mob .row h3{font-size:1.1rem;padding:0 .9rem .6rem}
+.mob .vp{padding:0;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.mob .vp::-webkit-scrollbar{display:none}
+.mob .track{transform:none!important;transition:none;padding:0 .9rem;will-change:auto}
+.mob .track>*{margin-right:.65rem}
+.mob .card{width:7.2rem}
+.mob .card .pic{width:7.2rem;height:10.2rem;border-radius:.6rem}
+.mob .card .t{font-size:.92rem;margin-top:.35rem}
+.mob .card .badge{font-size:.78rem;right:.3rem;top:.3rem}
+.mob .card .sub{font-size:.78rem;left:.4rem;right:.4rem;bottom:.3rem}
+.mob .empty{padding:1.2rem .9rem;font-size:1rem}
+.mob .pagehead{padding:1rem .9rem .6rem}
+.mob .pagehead h2{font-size:1.4rem}
+.mob .pagehead span{font-size:.9rem;padding-bottom:.2rem}
+.mob .cathead{padding:.8rem 0 .7rem}
+.mob .cathead h2{display:none}
+.mob .cathead .chips{width:100%;overflow-x:auto;padding:0 .9rem;scrollbar-width:none}
+.mob .cathead .chips::-webkit-scrollbar{display:none}
+.mob .chip{flex:0 0 auto;font-size:.95rem;padding:.35rem .9rem;margin:0 .5rem 0 0;white-space:nowrap}
+.mob .grid{padding:.3rem .9rem 2rem}
+.mob .grid>.card,.mob .srch .grid>.card,.mob .grid>.card:nth-child(6n),.mob .srch .grid>.card:nth-child(5n),.mob .srch .grid>.card:nth-child(6n){width:calc((100% - 1.4rem) / 3);margin:0 .7rem 1.1rem 0}
+.mob .grid>.card:nth-child(3n),.mob .srch .grid>.card:nth-child(3n){margin-right:0}
+.mob .grid>.card .pic{width:100%;height:0;padding-top:142%}
+/* 详情 */
+.mob .dtwrap,.mob .dtwrap.haseps{position:static;padding:0;overflow:visible}
+.mob .dtwrap .dt{flex-wrap:wrap;padding:1rem .9rem .4rem}
+.mob .dtwrap .dt .poster{width:7.8rem;height:11rem;margin-right:1rem;border-radius:.7rem}
+.mob .dtwrap .dt h1{font-size:1.45rem}
+.mob .dtwrap .dt .orig{font-size:.88rem}
+.mob .dtwrap .meta{font-size:.85rem}
+.mob .dt>.crew,.mob .dt>.intro,.mob .dt>.acts,.mob .dt>.srcline{flex:0 0 100%;width:100%}
+.mob .dtwrap .dt .crew{white-space:normal;font-size:.9rem;margin-top:.9rem;line-height:1.5}
+.mob .dtwrap .dt .intro{font-size:.95rem;line-height:1.65;-webkit-line-clamp:4}
+.mob .dtwrap .acts{margin-top:1rem}
+.mob .dtwrap .btn{font-size:1rem;padding:.65rem 1.3rem;justify-content:center}
+.mob .dtwrap .btn.pri{flex:1}
+.mob .dtwrap .acts>*:last-child{margin-right:0}
+.mob .dtwrap .srcline{font-size:.88rem}
+.mob .epcol{position:static;width:auto;display:block;padding:.8rem .9rem .6rem;background:none}
+.mob .epcol h3{font-size:1.1rem;margin-bottom:.7rem}
+.mob .epcol h3 small{display:inline;margin-left:.5rem;font-size:.85rem}
+.mob .epvp{overflow:visible;padding:0}
+.mob .epcol .eps{flex-direction:row;flex-wrap:wrap;transform:none!important}
+.mob .epcol .ep,.mob .epcol .ep:nth-child(3n){width:calc((100% - 1.5rem) / 4);margin:0 .5rem .5rem 0;font-size:.9rem;padding:.6rem .2rem}
+.mob .epcol .ep:nth-child(4n){margin-right:0}
+.mob #castRow .row{padding:.6rem 0 1.6rem}
+.mob .dtwrap .row h3{font-size:1.1rem}
+.mob .dtwrap .person{width:5rem}
+.mob .dtwrap .person .av{width:4.2rem;height:4.2rem}
+/* 弹层 */
+.mob .panel{width:90%;max-height:80%;overflow-y:auto;padding:1.4rem 1.2rem;border-radius:1.1rem}
+.mob .panel h2{font-size:1.3rem;margin-bottom:.7rem}
+.mob .panel p{font-size:1rem;line-height:1.75}
+.mob .picking{width:84%}
+.mob .picking .spin{width:3rem;height:3rem}
+.mob .picking h2{font-size:1.15rem}
+.mob .picking .st{font-size:.95rem}
+.mob .btn{font-size:1rem;padding:.6rem 1.3rem}
+.mob .btn svg{width:1.2rem;height:1.2rem}
+/* 搜索 */
+.mob .scroll.srch{left:0}
+.mob .srch .sbox{margin:.9rem .9rem .2rem;padding:.65rem .9rem;max-width:none}
+.mob .sbox svg{width:1.2rem;height:1.2rem;margin-right:.6rem}
+.mob .sbox input{font-size:1.05rem}
+.mob .sbox input::-webkit-search-cancel-button{-webkit-appearance:none}
+.mob .srch .pagehead,.mob .srch .grid{padding-left:.9rem}
+/* 设置 */
+.mob .lan{display:none}
+.mob .setwrap .pagehead{padding-top:1rem}
+.mob .setwrap .setrow,.mob .setrow{margin:0 .9rem .6rem;padding:.85rem 1rem;font-size:1rem;flex-wrap:wrap}
+.mob .setrow small{font-size:.85rem;max-width:62%}
+.mob .setrow.info small{max-width:none;flex:0 0 100%;text-align:left;margin:.4rem 0 0}
+.mob .setrow.dot>span::after{width:.4rem;height:.4rem}
+.mob #toast{top:auto;bottom:2.4rem;font-size:.95rem;max-width:88%;text-align:center}
