@@ -794,8 +794,8 @@ const PAGES = {
     const chips = CHIPS[key], name = { movie: "\u7535\u5F71", tv: "\u5267\u96C6", anime: "\u52A8\u6F2B", show: "\u7EFC\u827A" }[key];
     let ci = store.get("chip:" + key, 0);
     if (!chips[ci]) ci = 0;
-    $("#page").innerHTML = `<div class="scroll" data-pad="6"><div class="pagehead sec"><h2>${name}</h2><span id="cnt"></span></div>
-      <div class="chips sec" data-g="chips">${chips.map((c, i) => `<div class="chip f${i === ci ? " on" : ""}" data-i="${i}">${c[0]}</div>`).join("")}</div>
+    $("#page").innerHTML = `<div class="scroll" data-pad="6"><div class="pagehead sec cathead"><h2>${name}</h2><span id="cnt" style="display:none"></span>
+      <div class="chips" data-g="chips">${chips.map((c, i) => `<div class="chip f${i === ci ? " on" : ""}" data-i="${i}">${c[0]}</div>`).join("")}</div></div>
       <div class="grid" id="grid">${skel(14)}</div></div>`;
     const grid = $("#grid");
     let start = 0, busy = false, end = false, my = 0;

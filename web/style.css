@@ -321,3 +321,7 @@ body:not(.poster) #bg .aur{background:radial-gradient(42% 34% at 16% 14%,rgba(25
 .setwrap .pagehead{padding-top:5rem;padding-bottom:.8rem}
 .setwrap .setrow{padding:.75rem 1.4rem;margin-bottom:.7rem}
 .setwrap .setrow.info small{font-size:1rem}
+/* 分类页：二级菜单与标题同一行 */
+.cathead{align-items:center;padding-bottom:1.4rem}
+.cathead h2{margin-right:2.6rem}
+.cathead .chips{padding:0;flex-wrap:nowrap}
