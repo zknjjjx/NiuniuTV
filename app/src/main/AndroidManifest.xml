@@ -31,6 +31,7 @@
         </activity>
         <activity
             android:name=".PlayerActivity"
+            android:theme="@style/NnPlay"
             android:exported="false"
             android:configChanges="orientation|screenSize|keyboard|keyboardHidden|navigation|screenLayout|smallestScreenSize|uiMode"
             android:screenOrientation="landscape" />

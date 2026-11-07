@@ -813,6 +813,7 @@ const PAGES = {
       if (bootFocus) {
         bootFocus = false;
         F.set($('#tabs .tab[data-k="home"]'), true);
+        if (window.nnSplashGo) window.nnSplashGo();
         return;
       }
       if (restore && restore.focus && document.contains(restore.focus)) F.set(restore.focus);
@@ -1427,12 +1428,52 @@ document.addEventListener("keydown", (e) => {
 window.nnMenu = () => {
   if (F.cur && F.cur._menu) F.cur._menu();
 };
+function splash() {
+  const sp = $("#splash"), body = document.body;
+  const end = () => {
+    document.documentElement.classList.remove("splash0");
+    if (sp && sp.parentNode) sp.parentNode.removeChild(sp);
+    body.classList.remove("booting", "reveal");
+    try {
+      if (APP && NN.splashDone) NN.splashDone();
+    } catch (e) {
+    }
+  };
+  if (!sp || MOB) {
+    end();
+    window.nnSplashGo = () => {
+    };
+    return;
+  }
+  const t0 = Date.now();
+  let gone = false;
+  const go2 = () => {
+    if (gone) return;
+    gone = true;
+    const dog = sp.firstElementChild, logo = $(".brand img");
+    const a = dog.getBoundingClientRect(), b = logo.getBoundingClientRect();
+    if (!a.width || !b.width) {
+      end();
+      return;
+    }
+    const s = b.width / a.width, dx = b.left + b.width / 2 - (a.left + a.width / 2), dy = b.top + b.height / 2 - (a.top + a.height / 2);
+    const tf = `translate(${dx}px,${dy}px) scale(${s})`;
+    dog.style.webkitTransform = tf;
+    dog.style.transform = tf;
+    sp.classList.add("go");
+    body.classList.add("reveal");
+    setTimeout(end, 1150);
+  };
+  window.nnSplashGo = () => setTimeout(go2, Math.max(0, 700 - (Date.now() - t0)));
+  setTimeout(go2, 3e3);
+}
 function clock() {
   const d = /* @__PURE__ */ new Date();
   $("#clock").textContent = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 function boot() {
   if (MOB) document.body.classList.add("mob");
+  splash();
   fit();
   if (cfg.get("fx", "1") === "0") document.body.classList.add("nofx");
   window.addEventListener("resize", fit);

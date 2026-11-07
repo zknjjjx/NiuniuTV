@@ -44,7 +44,16 @@ async def main():
         await pg.route("**/*doubanio.com/**", img)
         await pg.add_init_script(INIT)
         await pg.goto((ROOT / "index.html").as_uri())
-        await pg.wait_for_timeout(9000)
+        await pg.wait_for_timeout(250)
+        await pg.screenshot(path=OUT / "0a-splash.png")
+        try:
+            await pg.wait_for_selector("#splash.go", state="attached", timeout=6000)
+            await pg.wait_for_timeout(380)
+            await pg.screenshot(path=OUT / "0b-splash-fly.png")
+        except Exception as e:
+            logs.append("SPLASH: " + repr(e))
+        await pg.wait_for_timeout(6000)
+        logs.append("SPLASHGONE: " + str(await pg.evaluate("!document.getElementById('splash')")))
         await pg.screenshot(path=OUT / "1-home.png")
         logs.append("STARTFOCUS: " + await pg.evaluate("F.cur && F.cur.textContent"))
         for k in ["ArrowDown", "ArrowRight", "ArrowRight", "ArrowDown"]:

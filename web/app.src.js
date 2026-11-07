@@ -516,7 +516,7 @@ const PAGES = {
       ${HOME_ROWS.map((r, i) => rowHTML("row" + i, r[0], skel(8))).join("")}</div>`;
     bindCards($("#page"));
     let focused = false;
-    const focusFirst = () => { if (focused || tok !== routeTok) return; focused = true; if (bootFocus) { bootFocus = false; F.set($('#tabs .tab[data-k="home"]'), true); return; } if (restore && restore.focus && document.contains(restore.focus)) F.set(restore.focus); else F.set($("#page .card.f")); };
+    const focusFirst = () => { if (focused || tok !== routeTok) return; focused = true; if (bootFocus) { bootFocus = false; F.set($('#tabs .tab[data-k="home"]'), true); if (window.nnSplashGo) window.nnSplashGo(); return; } if (restore && restore.focus && document.contains(restore.focus)) F.set(restore.focus); else F.set($("#page .card.f")); };
     const loadRow = i => {
       const r = HOME_ROWS[i];
       return dbList(r[1], r[2], r[3], 0, 24).then(d => {
@@ -908,9 +908,31 @@ document.addEventListener("keydown", e => {
 window.nnMenu = () => { if (F.cur && F.cur._menu) F.cur._menu(); };
 
 /* ---------------- 启动 ---------------- */
+// 启动动画：首页内容就绪（或最多等 3 秒）后，狗狗从屏幕中央缩到左上角 logo 的位置
+function splash() {
+  const sp = $("#splash"), body = document.body;
+  const end = () => { document.documentElement.classList.remove("splash0"); if (sp && sp.parentNode) sp.parentNode.removeChild(sp); body.classList.remove("booting", "reveal"); try { if (APP && NN.splashDone) NN.splashDone(); } catch (e) {} };
+  if (!sp || MOB) { end(); window.nnSplashGo = () => {}; return; }
+  const t0 = Date.now(); let gone = false;
+  const go = () => {
+    if (gone) return; gone = true;
+    const dog = sp.firstElementChild, logo = $(".brand img");
+    const a = dog.getBoundingClientRect(), b = logo.getBoundingClientRect();
+    if (!a.width || !b.width) { end(); return; }
+    const s = b.width / a.width, dx = b.left + b.width / 2 - (a.left + a.width / 2), dy = b.top + b.height / 2 - (a.top + a.height / 2);
+    const tf = `translate(${dx}px,${dy}px) scale(${s})`;
+    dog.style.webkitTransform = tf; dog.style.transform = tf;
+    sp.classList.add("go");
+    body.classList.add("reveal");
+    setTimeout(end, 1150);
+  };
+  window.nnSplashGo = () => setTimeout(go, Math.max(0, 700 - (Date.now() - t0)));   // 狗狗至少停留 0.7 秒
+  setTimeout(go, 3000);
+}
 function clock() { const d = new Date(); $("#clock").textContent = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; }
 function boot() {
   if (MOB) document.body.classList.add("mob");
+  splash();
   fit();
   if (cfg.get("fx", "1") === "0") document.body.classList.add("nofx");
   window.addEventListener("resize", fit);

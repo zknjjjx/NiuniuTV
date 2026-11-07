@@ -40,7 +40,8 @@ public class MainActivity extends Activity {
         Net.init();
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         web = new WebView(this);
-        web.setBackgroundColor(Color.parseColor("#0B0C10"));
+        // 电视：网页画出来之前透明，露出窗口背景里的启动狗狗，避免闪一下
+        web.setBackgroundColor(Ui.phone(this) ? Color.parseColor("#0B0C10") : Color.TRANSPARENT);
         web.setFocusable(true);
         web.setFocusableInTouchMode(true);
         web.setVerticalScrollBarEnabled(false);
@@ -98,6 +99,15 @@ public class MainActivity extends Activity {
     }
 
     public class Bridge {
+        /** 网页启动动画结束：WebView 恢复不透明，去掉窗口背景里的狗狗 */
+        @JavascriptInterface
+        public void splashDone() {
+            runOnUiThread(new Runnable() { public void run() {
+                if (web != null) web.setBackgroundColor(Color.parseColor("#0B0C10"));
+                getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Color.parseColor("#0B0C10")));
+            } });
+        }
+
         @JavascriptInterface
         public void fetch(final String id, final String url, final String headers, final int timeout) {
             (url.contains("douban.com") ? dbPool : pool).execute(new Runnable() {

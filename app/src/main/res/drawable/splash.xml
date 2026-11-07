@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 电视启动画面：深色底 + 居中狗狗（144dp），网页里的启动狗狗与它同位同大，接上后飞到左上角 -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/bg" />
+    <item><bitmap android:gravity="center" android:src="@drawable/splash_dog" android:filter="true" /></item>
+</layer-list>
