@@ -131,6 +131,7 @@ public class PlayerActivity extends Activity {
             public void onVideoInputFormatChanged(@NonNull EventTime t, @NonNull Format f, DecoderReuseEvaluation e) {
                 vFmt = f.width + "x" + f.height + (f.frameRate > 0 ? String.format(java.util.Locale.US, " %.3gfps", f.frameRate) : "");
                 if (f.frameRate > 0) matchRefresh(f.frameRate, f.width, f.height);
+                try { if (f.height > 0) sources.optJSONObject(si).put("h", Math.max(f.height, f.width * 9 / 16)); } catch (Exception ignore) {}
                 updateInfo();
             }
             @Override
@@ -499,8 +500,13 @@ public class PlayerActivity extends Activity {
                 if (tab == 0) { save(); ei = w; failed.clear(); load(0); }
                 else {
                     long pos = player.getCurrentPosition();
-                    int idx = matchEp(eps(w), epName(), ei);
-                    si = w; ei = Math.max(0, idx); failed.clear(); load(pos);
+                    int to;
+                    if (w == 0) { autoSrc = true; to = bestSource(); }
+                    else { autoSrc = false; to = w - 1; }
+                    if (to != si) {
+                        int idx = matchEp(eps(to), epName(), ei);
+                        si = to; ei = Math.max(0, idx); failed.clear(); load(pos);
+                    }
                 }
                 showStatus(tab == 0 ? "播放 " + epName() : "切换到「" + sources.optJSONObject(si).optString("site") + "」", 2000);
             }
@@ -513,9 +519,47 @@ public class PlayerActivity extends Activity {
         hideOsd();
         fade(panel, true);
         plist.requestFocus();
+        kickPanelIdle();
     }
 
-    private void hidePanel() { fade(panel, false); }
+    private void hidePanel() { h.removeCallbacks(panelIdle); fade(panel, false); }
+
+    /** 菜单 15 秒无操作自动收起 */
+    private final Runnable panelIdle = new Runnable() { public void run() { if (panelOn()) hidePanel(); } };
+    private void kickPanelIdle() { h.removeCallbacks(panelIdle); h.postDelayed(panelIdle, 15000); }
+
+    private boolean autoSrc = true;
+
+    private static String resName(int hh) {
+        if (hh >= 2000) return "4K";
+        if (hh >= 1300) return "2K";
+        if (hh >= 1000) return "1080P";
+        if (hh >= 700) return "720P";
+        if (hh >= 450) return "480P";
+        return hh > 0 ? hh + "P" : "";
+    }
+
+    /** 与详情页一致：1080 以上流畅 > 720(含未知)流畅 > 其余能通；同档按速度 */
+    private static int tierOf(JSONObject s) {
+        int hh = s.optInt("h", 0); long b = s.optLong("bps", 0);
+        if (b < 0) return 0;
+        if (b == 0) return 1;
+        int r = hh >= 1000 ? 3 : (hh >= 700 || hh == 0) ? 2 : 1;
+        double need = r == 3 ? 0.9 * 1048576 : r == 2 ? 0.45 * 1048576 : 0;
+        return (b >= need ? r : 1) + 1;
+    }
+    private int bestSource() {
+        String name = epName(); int best = si; long bs = Long.MIN_VALUE;
+        for (int i = 0; i < sources.length(); i++) {
+            JSONObject s = sources.optJSONObject(i);
+            if (failed.contains(i) && i != si) continue;
+            JSONArray a = eps(i);
+            if (a == null || a.length() == 0 || matchEp(a, name, ei) < 0) continue;
+            long sc = tierOf(s) * 10000000000L + Math.max(0, s.optLong("bps", 0));
+            if (sc > bs) { bs = sc; best = i; }
+        }
+        return best;
+    }
 
     private void fillPanel() {
         tabEp.setTextColor(tab == 0 ? 0xFFFFFFFF : 0x80FFFFFF);
@@ -527,8 +571,8 @@ public class PlayerActivity extends Activity {
         tabEp.measure(0, 0);
         ll.leftMargin = tab == 0 ? 0 : tabEp.getMeasuredWidth() + dp(30);
         tabLine.setLayoutParams(ll);
-        final int n = tab == 0 ? (a == null ? 0 : a.length()) : sources.length();
-        final int cur = tab == 0 ? ei : si;
+        final int n = tab == 0 ? (a == null ? 0 : a.length()) : sources.length() + 1;
+        final int cur = tab == 0 ? ei : (autoSrc ? 0 : si + 1);
         plist.setAdapter(new android.widget.BaseAdapter() {
             public int getCount() { return n; }
             public Object getItem(int i) { return i; }
@@ -548,14 +592,20 @@ public class PlayerActivity extends Activity {
                 } else { l = (TextView) row.getChildAt(0); r = (TextView) row.getChildAt(1); }
                 String left, right = "";
                 if (tab == 0) left = eps(si).optJSONObject(i).optString("name");
-                else {
-                    JSONObject s = sources.optJSONObject(i);
+                else if (i == 0) {
+                    left = "自动选择";
+                    right = autoSrc ? "当前 · " + sources.optJSONObject(si).optString("site") : "高清优先，卡了自动换";
+                } else {
+                    JSONObject s = sources.optJSONObject(i - 1);
                     long bps = s.optLong("bps", 0);
                     left = s.optString("site");
                     JSONArray e = s.optJSONArray("eps");
-                    right = (e == null ? 0 : e.length()) + " 集" + (bps > 0 ? String.format(java.util.Locale.US, "  ·  %.1f MB/s", bps / 1048576.0) : bps < 0 ? "  ·  不通" : "");
+                    String res = resName(s.optInt("h", 0));
+                    right = (res.length() > 0 ? res + "  ·  " : "") + (bps > 0 ? String.format(java.util.Locale.US, "%.1f MB/s  ·  ", bps / 1048576.0) : bps < 0 ? "不通  ·  " : "")
+                            + (e == null ? 0 : e.length()) + " 集";
+                    if (i - 1 == si) right = (res.length() > 0 ? res + "  ·  " : "") + "正在播放";
                 }
-                if (i == cur) right = "正在播放";
+                if (tab == 0 && i == cur) right = "正在播放";
                 l.setText(left);
                 l.setTextColor(i == cur ? 0xFFFFA477 : 0xE6FFFFFF);
                 r.setText(right);
@@ -647,6 +697,7 @@ public class PlayerActivity extends Activity {
         int k = e.getKeyCode();
         boolean down = e.getAction() == KeyEvent.ACTION_DOWN;
         if (panelOn()) {
+            kickPanelIdle();
             if (k == KeyEvent.KEYCODE_BACK || k == KeyEvent.KEYCODE_MENU) { if (!down) hidePanel(); return true; }
             if (k == KeyEvent.KEYCODE_DPAD_LEFT || k == KeyEvent.KEYCODE_DPAD_RIGHT) {
                 if (down && e.getRepeatCount() == 0) { tab = k == KeyEvent.KEYCODE_DPAD_LEFT ? 0 : 1; fillPanel(); }

@@ -24,6 +24,17 @@ async function getJSON(url, headers, timeout) {
   d.__ms = r.ms;
   return d;
 }
+// 自动选源：分辨率优先（1080 以上 > 720/未知 > 更低），同档按速度；速度不够流畅的降一档
+const MB = 1048576;
+function srcTier(s) {
+  const h = s.h || 0, b = s.bps || 0;
+  if (b < 0) return 0;
+  if (b === 0) return 1;                 // 未测
+  const r = h >= 1000 ? 3 : (h >= 700 || h === 0) ? 2 : 1;
+  const need = r === 3 ? 0.9 * MB : r === 2 ? 0.45 * MB : 0;
+  return (b >= need ? r : 1) + 1;        // 4=1080流畅 3=720流畅 2=其余能通
+}
+function srcScore(s) { return srcTier(s) * 1e10 + (s.bps > 0 ? s.bps : s.bps == null ? -((s.ms || 0) + (s.rank || 0) * 30) : 0); }
 function probe(url) {
   if (!APP) return Promise.resolve({ bps: 0 });
   return new Promise(r => { const id = "p" + (++seq); cbs[id] = x => { try { r(JSON.parse(x.body)); } catch (e) { r({ bps: -1 }); } }; NN.probe(id, url, 8000, 524288); });
@@ -616,7 +627,7 @@ const PAGES = {
       if (cancelled || tok !== routeTok) return;
       if (!st.srcs.length) { closeLayer(); toast("没找到可播放的片源"); return; }
       const need = ei + 1, maxEp = Math.max.apply(null, st.srcs.map(s => s.eps.length));
-      const score = s => (s.bps > 0 ? 3e9 + s.bps : s.bps == null ? 1e9 - s.ms - s.rank * 30 : 0);
+      const score = srcScore;
       const list = st.srcs.slice().sort((a, b) => {
         const ha = a.eps.length >= need ? 1 : 0, hb = b.eps.length >= need ? 1 : 0;
         if (ha !== hb) return hb - ha;
@@ -625,7 +636,7 @@ const PAGES = {
       });
       closeLayer();
       const data = { key, title: meta.title, pic: meta.pic || it.pic, id: it.id || "", type: kind, year: meta.year || "", si: 0, ei, pos: pos || 0,
-        sources: list.map(s => ({ site: s.site, eps: s.eps, bps: s.bps == null ? 0 : s.bps })) };
+        sources: list.map(s => ({ site: s.site, eps: s.eps, bps: s.bps == null ? 0 : s.bps, h: s.h || 0 })) };
       if (APP) NN.play(JSON.stringify(data)); else toast(`将播放「${list[0].site}」${list[0].eps[Math.min(ei, list[0].eps.length - 1)].name}`);
     }
     $("#bPlay")._ok = () => { const h = hist(); startPlay(h ? h.ei : 0, h ? h.pos : 0); };

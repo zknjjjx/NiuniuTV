@@ -52,6 +52,18 @@ function getJSON(url, headers, timeout) {
     return d;
   });
 }
+const MB = 1048576;
+function srcTier(s) {
+  const h = s.h || 0, b = s.bps || 0;
+  if (b < 0) return 0;
+  if (b === 0) return 1;
+  const r = h >= 1e3 ? 3 : h >= 700 || h === 0 ? 2 : 1;
+  const need = r === 3 ? 0.9 * MB : r === 2 ? 0.45 * MB : 0;
+  return (b >= need ? r : 1) + 1;
+}
+function srcScore(s) {
+  return srcTier(s) * 1e10 + (s.bps > 0 ? s.bps : s.bps == null ? -((s.ms || 0) + (s.rank || 0) * 30) : 0);
+}
 function probe(url) {
   if (!APP) return Promise.resolve({ bps: 0 });
   return new Promise((r) => {
@@ -932,7 +944,7 @@ const PAGES = {
             return;
           }
           const need = ei + 1, maxEp = Math.max.apply(null, st.srcs.map((s) => s.eps.length));
-          const score = (s) => s.bps > 0 ? 3e9 + s.bps : s.bps == null ? 1e9 - s.ms - s.rank * 30 : 0;
+          const score = srcScore;
           const list = st.srcs.slice().sort((a, b) => {
             const ha = a.eps.length >= need ? 1 : 0, hb = b.eps.length >= need ? 1 : 0;
             if (ha !== hb) return hb - ha;
@@ -953,7 +965,7 @@ const PAGES = {
             si: 0,
             ei,
             pos: pos || 0,
-            sources: list.map((s) => ({ site: s.site, eps: s.eps, bps: s.bps == null ? 0 : s.bps }))
+            sources: list.map((s) => ({ site: s.site, eps: s.eps, bps: s.bps == null ? 0 : s.bps, h: s.h || 0 }))
           };
           if (APP) NN.play(JSON.stringify(data));
           else toast(`\u5C06\u64AD\u653E\u300C${list[0].site}\u300D${list[0].eps[Math.min(ei, list[0].eps.length - 1)].name}`);
