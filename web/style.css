@@ -279,3 +279,11 @@ body:not(.poster) #bg .aur{background:radial-gradient(42% 34% at 16% 14%,rgba(25
 
 .brand img{width:3.2rem;height:3.2rem;border-radius:0;margin-right:.7rem}
 .brand span{font-size:1.55rem;letter-spacing:.08em;opacity:1;background:linear-gradient(90deg,var(--ac),var(--ac2));-webkit-background-clip:text;color:transparent}
+
+/* 2.5.7 选集单列窄栏，不挤占简介与演职员 */
+.dtwrap.haseps{right:10.6rem}
+.epcol{width:10.6rem;padding:5.4rem 1.8rem 1.6rem .6rem;background:linear-gradient(90deg,rgba(10,11,15,0),rgba(10,11,15,.6) 30%,rgba(10,11,15,.72))}
+.epcol h3{font-size:1.05rem;white-space:nowrap}
+.epcol h3 small{display:block;margin:.25rem 0 0;font-size:.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.epcol .eps{flex-direction:column;flex-wrap:nowrap}
+.epcol .ep,.epcol .ep:nth-child(3n){width:100%;margin:0 0 .5rem 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
