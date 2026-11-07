@@ -317,3 +317,7 @@ body:not(.poster) #bg .aur{background:radial-gradient(42% 34% at 16% 14%,rgba(25
 .setrow.info{opacity:.6}
 .setrow.info small{white-space:normal;text-align:right;line-height:1.5}
 .setwrap{padding-bottom:3rem}
+/* 设置页紧凑：一屏放下全部，不必滚动 */
+.setwrap .pagehead{padding-top:5rem;padding-bottom:.8rem}
+.setwrap .setrow{padding:.75rem 1.4rem;margin-bottom:.7rem}
+.setwrap .setrow.info small{font-size:1rem}
