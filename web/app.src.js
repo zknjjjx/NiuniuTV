@@ -317,7 +317,7 @@ const F = {
       const s = main + cross * (horiz ? 4 : 1.2);
       if (s < bs) { bs = s; best = el; }
     });
-    if (!best && (dir === "left" || dir === "right") && !F.cross && $(".epcol")) { F.cross = true; F.move(dir); F.cross = false; return; }
+    if (!best && (dir === "left" || dir === "right") && !F.cross && $(".epcol,.skb")) { F.cross = true; F.move(dir); F.cross = false; return; }
     if (!best) return;
     if (!(dir === "left" || dir === "right")) {
       const g = best.closest("[data-g]");
@@ -672,35 +672,76 @@ const PAGES = {
   },
 
   search(tok, q) {
-    $("#page").innerHTML = `<div class="scroll" data-pad="6"><div class="pagehead sec"><h2>搜索</h2><span>按 OK 弹出输入法，支持语音输入</span></div>
-      <div class="sbox f sec" id="sbox" data-g="sb">${ICON_SEARCH}<input id="q" placeholder="片名 / 演员 / 导演" value="${esc(q || "")}"></div>
-      <div id="sres"></div></div>`;
-    const input = $("#q"), box = $("#sbox");
-    let timer = 0, my = 0;
+    // 仿 TVBox：左侧字母键盘，按拼音首字母搜（爱奇艺联想接口支持首字母），中文/语音走豆瓣
+    const KEYS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890".split("");
+    $("#page").innerHTML = `<div class="skb"><div class="sq" id="sq"><span id="sqt"></span><i>拼音首字母，如 XCLF</i></div>
+      <div class="keys" data-g="kb">${KEYS.map(k => `<div class="key f" data-k="${k}">${k}</div>`).join("")}
+      <div class="key f wide" data-k="clr">清空</div><div class="key f wide" data-k="del">删除</div><div class="key f wide" data-k="ime">输入法</div></div>
+      <input id="q" class="imeq" value=""></div>
+      <div class="scroll srch" data-pad="6"><div class="pagehead sec"><h2 id="sh">大家都在看</h2><span id="ss"></span></div><div id="sres"></div></div>`;
+    const input = $("#q");
+    let text = q || "", timer = 0, my = 0;
+    const show = () => { $("#sqt").textContent = text; $("#sq").classList.toggle("has", !!text); };
+    const isLetters = v => /^[a-z0-9]+$/i.test(v);
+    const grid = items => `<div class="grid">${items.map(it => card(it, { sub: it.sub, cls: "grid-item" })).join("")}</div>`;
+    const cidType = c => (c === 1 ? "movie" : "tv");
+    const iqSuggest = async v => {
+      const d = await getJSON(`https://suggest.video.iqiyi.com/?if=mobile&key=${encodeURIComponent(v)}`, null, 6000);
+      return (d.data || []).filter(x => x.name && [1, 2, 4, 6].indexOf(x.cid) >= 0).slice(0, 18)
+        .map(x => ({ id: "", title: x.name, pic: (x.picture_url || "").replace(/^http:/, "https:"), year: x.year || "", type: cidType(x.cid), sub: [x.cname, x.year].filter(Boolean).join(" · ") }));
+    };
+    // 联想结果没有豆瓣 id：点开时先去豆瓣按片名+年份找，找不到也能直接按片名找片源
+    const bindIq = items => $$("#sres .card").forEach((c, i) => {
+      const it = items[i];
+      c._ok = async () => {
+        let hit = null;
+        try {
+          const r = await dbSearch(it.title);
+          hit = r.find(x => x.title === it.title && (!it.year || !x.year || Math.abs(+x.year - +it.year) <= 1)) || r.find(x => x.title === it.title);
+        } catch (e) {}
+        openDetail(hit ? { id: hit.id, type: hit.type, title: hit.title, year: hit.year, pic: hit.pic || it.pic } : { id: "", type: it.type, title: it.title, year: it.year, pic: it.pic });
+      };
+    });
     const run = async () => {
-      const v = input.value.trim(), me = ++my;
+      const v = text.trim(), me = ++my;
       if (!v) { hot(); return; }
-      $("#sres").innerHTML = `<div class="grid">${skel(7)}</div>`;
+      $("#sh").textContent = "搜索结果"; $("#ss").textContent = "";
+      $("#sres").innerHTML = `<div class="grid">${skel(5)}</div>`;
       try {
-        const items = await dbSearch(v);
+        let items = [], iq = false;
+        if (isLetters(v)) { try { items = await iqSuggest(v); iq = items.length > 0; } catch (e) {} }
+        if (!items.length) items = (await dbSearch(v)).map(it => Object.assign(it, { sub: String(it.sub).split(" / ")[0] }));
         if (tok !== routeTok || me !== my) return;
-        $("#sres").innerHTML = items.length ? `<div class="grid">${items.map(it => card(it, { sub: String(it.sub).split(" / ")[0], cls: "grid-item" })).join("")}</div>`
-          : `<div class="empty">豆瓣没搜到「${esc(v)}」，换个说法试试</div>`;
+        $("#ss").textContent = items.length ? `${items.length} 部` : "";
+        $("#sres").innerHTML = items.length ? grid(items) : `<div class="empty">没搜到「${esc(v)}」</div>`;
         bindCards($("#sres"));
-      } catch (e) { $("#sres").innerHTML = `<div class="empty">搜索失败，稍后再试</div>`; }
+        if (iq) bindIq(items);
+      } catch (e) { if (me === my) $("#sres").innerHTML = `<div class="empty">搜索失败，稍后再试</div>`; }
     };
     const hot = () => {
-      dbList("movie", "热门", "全部", 0, 14).then(d => {
-        if (tok !== routeTok || input.value.trim()) return;
-        $("#sres").innerHTML = `<div class="row" style="padding-top:.6rem"><h3>大家都在看</h3></div><div class="grid">${d.items.map(it => card(it, { sub: short(it.sub).split(" · ")[0], cls: "grid-item" })).join("")}</div>`;
+      $("#sh").textContent = "大家都在看"; $("#ss").textContent = "";
+      dbList("movie", "热门", "全部", 0, 15).then(d => {
+        if (tok !== routeTok || text.trim()) return;
+        $("#sres").innerHTML = grid(d.items.map(it => Object.assign(it, { sub: short(it.sub).split(" · ")[0] })));
         bindCards($("#sres"));
       }).catch(() => {});
     };
-    input.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(run, 700); });
-    input.addEventListener("keydown", e => { if (e.keyCode === 13) { e.preventDefault(); input.blur(); run(); const c = $("#sres .card"); if (c) setTimeout(() => F.set(c), 400); } });
-    box._ok = () => { input.focus(); };
-    F.set(box);
-    if (q) run(); else hot();
+    const later = () => { clearTimeout(timer); timer = setTimeout(run, 450); };
+    $$(".skb .key").forEach(k => {
+      k._ok = () => {
+        const c = k.dataset.k;
+        if (c === "clr") text = "";
+        else if (c === "del") text = text.slice(0, -1);
+        else if (c === "ime") { input.value = text; input.focus(); return; }
+        else if (text.length < 20) text += c;
+        show(); later();
+      };
+    });
+    input.addEventListener("keydown", e => { if (e.keyCode === 13) { e.preventDefault(); text = input.value.trim(); input.blur(); show(); run(); F.set($(".skb .key")); } });
+    input.addEventListener("blur", () => { if (input.value.trim() && input.value.trim() !== text) { text = input.value.trim(); show(); run(); } });
+    show();
+    F.set($(".skb .key"));
+    if (text) run(); else hot();
   },
 
   history(tok) {

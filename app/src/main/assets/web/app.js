@@ -484,7 +484,7 @@ const F = {
         best = el;
       }
     });
-    if (!best && (dir === "left" || dir === "right") && !F.cross && $(".epcol")) {
+    if (!best && (dir === "left" || dir === "right") && !F.cross && $(".epcol,.skb")) {
       F.cross = true;
       F.move(dir);
       F.cross = false;
@@ -1019,53 +1019,113 @@ const PAGES = {
     });
   },
   search(tok, q) {
-    $("#page").innerHTML = `<div class="scroll" data-pad="6"><div class="pagehead sec"><h2>\u641C\u7D22</h2><span>\u6309 OK \u5F39\u51FA\u8F93\u5165\u6CD5\uFF0C\u652F\u6301\u8BED\u97F3\u8F93\u5165</span></div>
-      <div class="sbox f sec" id="sbox" data-g="sb">${ICON_SEARCH}<input id="q" placeholder="\u7247\u540D / \u6F14\u5458 / \u5BFC\u6F14" value="${esc(q || "")}"></div>
-      <div id="sres"></div></div>`;
-    const input = $("#q"), box = $("#sbox");
-    let timer = 0, my = 0;
+    const KEYS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890".split("");
+    $("#page").innerHTML = `<div class="skb"><div class="sq" id="sq"><span id="sqt"></span><i>\u62FC\u97F3\u9996\u5B57\u6BCD\uFF0C\u5982 XCLF</i></div>
+      <div class="keys" data-g="kb">${KEYS.map((k) => `<div class="key f" data-k="${k}">${k}</div>`).join("")}
+      <div class="key f wide" data-k="clr">\u6E05\u7A7A</div><div class="key f wide" data-k="del">\u5220\u9664</div><div class="key f wide" data-k="ime">\u8F93\u5165\u6CD5</div></div>
+      <input id="q" class="imeq" value=""></div>
+      <div class="scroll srch" data-pad="6"><div class="pagehead sec"><h2 id="sh">\u5927\u5BB6\u90FD\u5728\u770B</h2><span id="ss"></span></div><div id="sres"></div></div>`;
+    const input = $("#q");
+    let text = q || "", timer = 0, my = 0;
+    const show = () => {
+      $("#sqt").textContent = text;
+      $("#sq").classList.toggle("has", !!text);
+    };
+    const isLetters = (v) => /^[a-z0-9]+$/i.test(v);
+    const grid = (items) => `<div class="grid">${items.map((it) => card(it, { sub: it.sub, cls: "grid-item" })).join("")}</div>`;
+    const cidType = (c) => c === 1 ? "movie" : "tv";
+    const iqSuggest = (v) => __async(this, null, function* () {
+      const d = yield getJSON(`https://suggest.video.iqiyi.com/?if=mobile&key=${encodeURIComponent(v)}`, null, 6e3);
+      return (d.data || []).filter((x) => x.name && [1, 2, 4, 6].indexOf(x.cid) >= 0).slice(0, 18).map((x) => ({ id: "", title: x.name, pic: (x.picture_url || "").replace(/^http:/, "https:"), year: x.year || "", type: cidType(x.cid), sub: [x.cname, x.year].filter(Boolean).join(" \xB7 ") }));
+    });
+    const bindIq = (items) => $$("#sres .card").forEach((c, i) => {
+      const it = items[i];
+      c._ok = () => __async(this, null, function* () {
+        let hit = null;
+        try {
+          const r = yield dbSearch(it.title);
+          hit = r.find((x) => x.title === it.title && (!it.year || !x.year || Math.abs(+x.year - +it.year) <= 1)) || r.find((x) => x.title === it.title);
+        } catch (e) {
+        }
+        openDetail(hit ? { id: hit.id, type: hit.type, title: hit.title, year: hit.year, pic: hit.pic || it.pic } : { id: "", type: it.type, title: it.title, year: it.year, pic: it.pic });
+      });
+    });
     const run = () => __async(this, null, function* () {
-      const v = input.value.trim(), me = ++my;
+      const v = text.trim(), me = ++my;
       if (!v) {
         hot();
         return;
       }
-      $("#sres").innerHTML = `<div class="grid">${skel(7)}</div>`;
+      $("#sh").textContent = "\u641C\u7D22\u7ED3\u679C";
+      $("#ss").textContent = "";
+      $("#sres").innerHTML = `<div class="grid">${skel(5)}</div>`;
       try {
-        const items = yield dbSearch(v);
+        let items = [], iq = false;
+        if (isLetters(v)) {
+          try {
+            items = yield iqSuggest(v);
+            iq = items.length > 0;
+          } catch (e) {
+          }
+        }
+        if (!items.length) items = (yield dbSearch(v)).map((it) => Object.assign(it, { sub: String(it.sub).split(" / ")[0] }));
         if (tok !== routeTok || me !== my) return;
-        $("#sres").innerHTML = items.length ? `<div class="grid">${items.map((it) => card(it, { sub: String(it.sub).split(" / ")[0], cls: "grid-item" })).join("")}</div>` : `<div class="empty">\u8C46\u74E3\u6CA1\u641C\u5230\u300C${esc(v)}\u300D\uFF0C\u6362\u4E2A\u8BF4\u6CD5\u8BD5\u8BD5</div>`;
+        $("#ss").textContent = items.length ? `${items.length} \u90E8` : "";
+        $("#sres").innerHTML = items.length ? grid(items) : `<div class="empty">\u6CA1\u641C\u5230\u300C${esc(v)}\u300D</div>`;
         bindCards($("#sres"));
+        if (iq) bindIq(items);
       } catch (e) {
-        $("#sres").innerHTML = `<div class="empty">\u641C\u7D22\u5931\u8D25\uFF0C\u7A0D\u540E\u518D\u8BD5</div>`;
+        if (me === my) $("#sres").innerHTML = `<div class="empty">\u641C\u7D22\u5931\u8D25\uFF0C\u7A0D\u540E\u518D\u8BD5</div>`;
       }
     });
     const hot = () => {
-      dbList("movie", "\u70ED\u95E8", "\u5168\u90E8", 0, 14).then((d) => {
-        if (tok !== routeTok || input.value.trim()) return;
-        $("#sres").innerHTML = `<div class="row" style="padding-top:.6rem"><h3>\u5927\u5BB6\u90FD\u5728\u770B</h3></div><div class="grid">${d.items.map((it) => card(it, { sub: short(it.sub).split(" \xB7 ")[0], cls: "grid-item" })).join("")}</div>`;
+      $("#sh").textContent = "\u5927\u5BB6\u90FD\u5728\u770B";
+      $("#ss").textContent = "";
+      dbList("movie", "\u70ED\u95E8", "\u5168\u90E8", 0, 15).then((d) => {
+        if (tok !== routeTok || text.trim()) return;
+        $("#sres").innerHTML = grid(d.items.map((it) => Object.assign(it, { sub: short(it.sub).split(" \xB7 ")[0] })));
         bindCards($("#sres"));
       }).catch(() => {
       });
     };
-    input.addEventListener("input", () => {
+    const later = () => {
       clearTimeout(timer);
-      timer = setTimeout(run, 700);
+      timer = setTimeout(run, 450);
+    };
+    $$(".skb .key").forEach((k) => {
+      k._ok = () => {
+        const c = k.dataset.k;
+        if (c === "clr") text = "";
+        else if (c === "del") text = text.slice(0, -1);
+        else if (c === "ime") {
+          input.value = text;
+          input.focus();
+          return;
+        } else if (text.length < 20) text += c;
+        show();
+        later();
+      };
     });
     input.addEventListener("keydown", (e) => {
       if (e.keyCode === 13) {
         e.preventDefault();
+        text = input.value.trim();
         input.blur();
+        show();
         run();
-        const c = $("#sres .card");
-        if (c) setTimeout(() => F.set(c), 400);
+        F.set($(".skb .key"));
       }
     });
-    box._ok = () => {
-      input.focus();
-    };
-    F.set(box);
-    if (q) run();
+    input.addEventListener("blur", () => {
+      if (input.value.trim() && input.value.trim() !== text) {
+        text = input.value.trim();
+        show();
+        run();
+      }
+    });
+    show();
+    F.set($(".skb .key"));
+    if (text) run();
     else hot();
   },
   history(tok) {

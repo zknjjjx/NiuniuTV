@@ -287,3 +287,24 @@ body:not(.poster) #bg .aur{background:radial-gradient(42% 34% at 16% 14%,rgba(25
 .epcol h3 small{display:block;margin:.25rem 0 0;font-size:.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .epcol .eps{flex-direction:column;flex-wrap:nowrap}
 .epcol .ep,.epcol .ep:nth-child(3n){width:100%;margin:0 0 .5rem 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* 2.5.8 搜索：左侧字母键盘 */
+.skb{position:absolute;left:0;top:0;bottom:0;width:25rem;padding:5.8rem 1.6rem 1.6rem 3.2rem;z-index:3}
+.skb .sq{height:3.4rem;border-radius:.9rem;background:var(--gl);border:1px solid var(--gb);display:flex;align-items:center;padding:0 1.1rem;margin-bottom:1rem;overflow:hidden}
+.skb .sq span{font-size:1.6rem;letter-spacing:.12em;color:#fff;white-space:nowrap}
+.skb .sq i{font-style:normal;font-size:1rem;opacity:.45;white-space:nowrap}
+.skb .sq.has i{display:none}
+.skb .keys{display:flex;flex-wrap:wrap}
+.skb .key{width:calc((100% - 2.5rem) / 6);margin:0 .5rem .5rem 0;height:2.9rem;line-height:2.9rem;text-align:center;font-size:1.25rem;border-radius:.6rem;background:var(--gl);border:1px solid var(--gb)}
+.skb .key:nth-child(6n){margin-right:0}
+.skb .key.wide{width:calc((100% - 1rem) / 3);font-size:1.05rem}
+.skb .key.wide:nth-child(6n){margin-right:.5rem}
+.skb .key[data-k=ime]{margin-right:0}
+.skb .key.focus{background:linear-gradient(90deg,var(--ac),var(--ac2));border-color:transparent;color:#fff}
+.skb .imeq{position:absolute;left:-999px;top:0;width:10px;opacity:0}
+.scroll.srch{left:25rem}
+.srch .pagehead{padding-left:1.6rem}
+.srch .grid{padding-left:1.6rem}
+.srch .grid>.card{width:calc((100% - 5.2rem) / 5)}
+.srch .grid>.card:nth-child(6n){margin-right:1.3rem}
+.srch .grid>.card:nth-child(5n){margin-right:0}
