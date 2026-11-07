@@ -504,7 +504,7 @@ public class PlayerActivity extends Activity {
                 break;
             case K_PREV: jumpEp(ei - 1); break;
             case K_NEXT: jumpEp(ei + 1); break;
-            case K_SRC: openSrc(); return;
+            case K_SRC: exitKeys(); showPanel(1); return;   // 换源：弹出右侧半透明片源菜单
         }
         if (!canKey(keySel)) moveKey(keySel == K_PREV ? 1 : -1);
         paintKeys();
@@ -721,10 +721,11 @@ public class PlayerActivity extends Activity {
     // ---------------- 侧边选集 / 换源面板 ----------------
     private boolean panelOn() { return panel != null && panel.getVisibility() == View.VISIBLE; }
 
+    private LinearLayout pbox;
     private void buildPanel(FrameLayout root) {
         panel = new FrameLayout(this);
         panel.setBackground(new GradientDrawable(GradientDrawable.Orientation.RIGHT_LEFT, new int[]{0xF70F1015, 0xEB0F1015, 0x000F1015}));
-        LinearLayout box = new LinearLayout(this);
+        LinearLayout box = pbox = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
         box.setPadding(dp(36), dp(40), dp(44), dp(28));
         LinearLayout tabs = new LinearLayout(this);
@@ -779,6 +780,11 @@ public class PlayerActivity extends Activity {
 
     private void showPanel(int which) {
         tab = which;
+        if (!Ui.phone(this)) {   // 电视：选集窄栏；片源要放分辨率和速率，宽一些
+            panel.getLayoutParams().width = dp(which == 1 ? 560 : 400);
+            pbox.getLayoutParams().width = dp(which == 1 ? 440 : 280);
+            panel.requestLayout();
+        }
         fillPanel();
         hideOsd();
         fade(panel, true);
@@ -833,7 +839,9 @@ public class PlayerActivity extends Activity {
         tabSrc.setText("片源  " + sources.length());
         LinearLayout.LayoutParams ll = (LinearLayout.LayoutParams) tabLine.getLayoutParams();
         tabEp.measure(0, 0);
-        ll.leftMargin = tab == 0 ? 0 : tabEp.getMeasuredWidth() + dp(30);
+        boolean tvOne = !Ui.phone(this);   // 电视一次只显示一个标题
+        if (tvOne) { tabEp.setVisibility(tab == 0 ? View.VISIBLE : View.GONE); tabSrc.setVisibility(tab == 1 ? View.VISIBLE : View.GONE); ((LinearLayout.LayoutParams) tabSrc.getLayoutParams()).leftMargin = tab == 1 ? 0 : dp(30); }
+        ll.leftMargin = tab == 0 || tvOne ? 0 : tabEp.getMeasuredWidth() + dp(30);
         tabLine.setLayoutParams(ll);
         final int n = tab == 0 ? (a == null ? 0 : a.length()) : sources.length() + 1;
         final int cur = tab == 0 ? ei : (autoSrc ? 0 : si + 1);
@@ -867,7 +875,7 @@ public class PlayerActivity extends Activity {
                     String res = resName(s.optInt("h", 0));
                     right = (res.length() > 0 ? res + "  ·  " : "") + (bps > 0 ? String.format(java.util.Locale.US, "%.1f MB/s  ·  ", bps / 1048576.0) : bps < 0 ? "不通  ·  " : "")
                             + (e == null ? 0 : e.length()) + " 集";
-                    if (i - 1 == si) right = (res.length() > 0 ? res + "  ·  " : "") + "正在播放";
+                    if (i - 1 == si) right = (res.length() > 0 ? res + "  ·  " : "") + (bps > 0 ? String.format(java.util.Locale.US, "%.1f MB/s  ·  ", bps / 1048576.0) : "") + "正在播放";
                 }
                 if (tab == 0 && i == cur) right = "正在播放";
                 l.setText(left);
