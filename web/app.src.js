@@ -650,7 +650,9 @@ const PAGES = {
       if (APP) NN.play(JSON.stringify(data)); else toast(`将播放「${list[0].site}」${list[0].eps[Math.min(ei, list[0].eps.length - 1)].name}`);
     }
     $("#bPlay")._ok = () => { const h = hist(); startPlay(h ? h.ei : 0, h ? h.pos : 0); };
-    $("#bIntro")._ok = () => openLayer(`<div class="panel"><h2>${esc(meta.title)}</h2><p>${esc(meta.intro || "暂无简介")}</p><div class="acts" style="margin-top:1.6rem"><div class="btn f">关闭</div></div></div>`);
+    $("#bIntro")._ok = () => openLayer(`<div class="panel"><h2>${esc(meta.title)}</h2><p>${esc(meta.intro || "暂无简介")}</p><div class="acts" style="margin-top:1.6rem"><div class="btn f" id="iClose">关闭</div></div></div>`, "#iClose");
+    // 弹层要在 openLayer 之后才有关闭按钮，这里补上它的 OK 动作
+    { const o = $("#bIntro")._ok; $("#bIntro")._ok = () => { o(); const c = $("#iClose"); if (c) c._ok = closeLayer; }; }
     $("#layer")._dummy = 0;
     window.__refreshDetail = () => { playLabel(); epsShown = 0; showEps(); };
 

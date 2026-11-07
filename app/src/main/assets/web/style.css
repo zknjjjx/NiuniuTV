@@ -325,3 +325,4 @@ body:not(.poster) #bg .aur{background:radial-gradient(42% 34% at 16% 14%,rgba(25
 .cathead{align-items:center;padding-bottom:1.4rem}
 .cathead h2{margin-right:2.6rem}
 .cathead .chips{padding:0;flex-wrap:nowrap}
+.cathead .chip{margin-bottom:0}

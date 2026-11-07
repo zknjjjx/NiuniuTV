@@ -992,7 +992,15 @@ const PAGES = {
         const h = hist();
         startPlay(h ? h.ei : 0, h ? h.pos : 0);
       };
-      $("#bIntro")._ok = () => openLayer(`<div class="panel"><h2>${esc(meta.title)}</h2><p>${esc(meta.intro || "\u6682\u65E0\u7B80\u4ECB")}</p><div class="acts" style="margin-top:1.6rem"><div class="btn f">\u5173\u95ED</div></div></div>`);
+      $("#bIntro")._ok = () => openLayer(`<div class="panel"><h2>${esc(meta.title)}</h2><p>${esc(meta.intro || "\u6682\u65E0\u7B80\u4ECB")}</p><div class="acts" style="margin-top:1.6rem"><div class="btn f" id="iClose">\u5173\u95ED</div></div></div>`, "#iClose");
+      {
+        const o = $("#bIntro")._ok;
+        $("#bIntro")._ok = () => {
+          o();
+          const c = $("#iClose");
+          if (c) c._ok = closeLayer;
+        };
+      }
       $("#layer")._dummy = 0;
       window.__refreshDetail = () => {
         playLabel();
