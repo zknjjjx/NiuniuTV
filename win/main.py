@@ -104,7 +104,7 @@ class Api:
             self._win.toggle_fullscreen()
 
 
-def dark_titlebar(win):
+def dark_titlebar(win, repaint=True):
     """把 Windows 标题栏染成和页面一样的深色（Win11 可指定颜色，Win10 用系统暗色）。"""
     try:
         import ctypes
@@ -128,8 +128,16 @@ def dark_titlebar(win):
         put(35, 0x00100C0B)          # 标题栏颜色 #0b0c10（COLORREF 为 BGR，Win11）
         put(34, 0x00100C0B)          # 边框同色
         put(36, 0x00D8DCE4)          # 标题文字浅灰
-        # 让 Win10 立即重绘标题栏
-        u32.SetWindowPos(wintypes.HWND(hwnd), None, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0004 | 0x0010 | 0x0020)
+        # Win10 不会立即重绘标题栏：把窗口宽度临时 +1 再改回，强制系统按新颜色重画
+        if repaint:
+            H = wintypes.HWND(hwnd)
+            r = wintypes.RECT()
+            u32.GetWindowRect(H, ctypes.byref(r))
+            w, h = r.right - r.left, r.bottom - r.top
+            fl = 0x0002 | 0x0004 | 0x0010   # NOMOVE | NOZORDER | NOACTIVATE
+            u32.SetWindowPos(H, None, 0, 0, w + 1, h, fl)
+            u32.SetWindowPos(H, None, 0, 0, w, h, fl | 0x0020)  # FRAMECHANGED
+            u32.RedrawWindow(H, None, None, 0x0400 | 0x0001 | 0x0100)  # FRAME | INVALIDATE | UPDATENOW
     except Exception as e:
         log("标题栏染色失败", repr(e))
 
@@ -164,6 +172,9 @@ def main():
                                 background_color="#0b0c10", js_api=api, text_select=False)
     api._win = win
     win.events.loaded += lambda: win.evaluate_js(FS_JS)
+    # 窗口显示前先染色（避免开窗时闪白），显示后再补一次并强制重绘
+    if hasattr(win.events, "before_show"):
+        win.events.before_show += lambda: dark_titlebar(win, repaint=False)
     win.events.shown += lambda: dark_titlebar(win)
     webview.start(gui="edgechromium", private_mode=False, storage_path=os.path.join(DATA, "webview"))
     os._exit(0)
