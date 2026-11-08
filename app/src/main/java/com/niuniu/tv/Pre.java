@@ -149,6 +149,28 @@ public class Pre {
         return job != null && job.url.equals(url) && !job.dead && SystemClock.uptimeMillis() - job.lastData < ms;
     }
 
+    /** 从播放位置往后、连续已存在磁盘上的时长（毫秒） */
+    static synchronized long cachedAheadMs(String url, long posMs) {
+        if (job == null || !job.url.equals(url) || cache == null) return 0;
+        long p = Math.max(0, posMs) * 1000, end = p;
+        int n = 0;
+        for (Seg s : job.segs) {
+            if (s.startUs < 0 || s.endUs <= p) continue;
+            if (++n > 600) break;
+            if (!(s.done || onDisk(s))) break;
+            end = s.endUs;
+        }
+        return (end - p) / 1000;
+    }
+
+    static boolean onDisk(Seg s) {
+        try {
+            long len = s.spec.length;
+            if (len == C.LENGTH_UNSET) len = androidx.media3.datasource.cache.ContentMetadata.getContentLength(cache.getContentMetadata(s.key));
+            return len > 0 && cache.isCached(s.key, s.spec.position, len);
+        } catch (Throwable e) { return false; }
+    }
+
     static class Seg { DataSpec spec; String key; long startUs, endUs, size; boolean done; int fails; }
 
     static class Job extends Thread {
@@ -157,7 +179,7 @@ public class Pre {
         volatile boolean dead, gated, ready;
         volatile Seg curSeg;
         volatile CacheWriter writer;
-        final List<Seg> segs = new ArrayList<>();
+        volatile List<Seg> segs = new ArrayList<>();
 
         Job(String url, long posMs, long aheadMs) {
             super("nn-pre");
@@ -195,6 +217,7 @@ public class Pre {
                 if (!mp.hasEndTag) { dead = true; return; }   // 直播不预下载
                 Set<String> keys = new HashSet<>();
                 Set<String> inits = new HashSet<>();
+                List<Seg> segs = new ArrayList<>();
                 for (HlsMediaPlaylist.Segment s : mp.segments) {
                     if (s.initializationSegment != null) {
                         HlsMediaPlaylist.Segment is = s.initializationSegment;
@@ -206,6 +229,7 @@ public class Pre {
                     segs.add(seg(u, s.byteRangeOffset, s.byteRangeLength, s.relativeStartTimeUs, s.relativeStartTimeUs + s.durationUs));
                 }
                 for (Seg s : segs) keys.add(s.key);
+                this.segs = segs;
                 clearOthers(keys);
                 long lastClean = SystemClock.uptimeMillis();
                 byte[] tmp = new byte[128 * 1024];

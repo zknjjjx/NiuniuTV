@@ -810,7 +810,24 @@ public class PlayerActivity extends Activity {
         fade(panel, true);
         plist.requestFocus();
         kickPanelIdle();
+        h.removeCallbacks(panelTick);
+        h.postDelayed(panelTick, 1000);
     }
+
+    private android.widget.BaseAdapter padapter;
+    /** 播放位置往后已缓存多久：磁盘上连续的分片与播放器内存缓冲取大者 */
+    private String cachedText() {
+        if (player == null) return "";
+        long pos = player.getCurrentPosition();
+        long ms = Math.max(Pre.cachedAheadMs(curUrl, pos), player.getBufferedPosition() - pos);
+        long sec = Math.max(0, ms / 1000);
+        return "  ·  已缓存 " + (sec >= 60 ? sec / 60 + " 分 " + sec % 60 + " 秒" : sec + " 秒");
+    }
+    private final Runnable panelTick = new Runnable() { public void run() {
+        if (!panelOn()) return;
+        if (tab == 1 && padapter != null) padapter.notifyDataSetChanged();
+        h.postDelayed(this, 1000);
+    } };
 
     private void hidePanel() { h.removeCallbacks(panelIdle); fade(panel, false); }
 
@@ -865,7 +882,7 @@ public class PlayerActivity extends Activity {
         tabLine.setLayoutParams(ll);
         final int n = tab == 0 ? (a == null ? 0 : a.length()) : sources.length() + 1;
         final int cur = tab == 0 ? ei : (autoSrc ? 0 : si + 1);
-        plist.setAdapter(new android.widget.BaseAdapter() {
+        plist.setAdapter(padapter = new android.widget.BaseAdapter() {
             public int getCount() { return n; }
             public Object getItem(int i) { return i; }
             public long getItemId(int i) { return i; }
@@ -886,7 +903,7 @@ public class PlayerActivity extends Activity {
                 if (tab == 0) left = eps(si).optJSONObject(i).optString("name");
                 else if (i == 0) {
                     left = "自动选择";
-                    right = autoSrc ? "当前 · " + sources.optJSONObject(si).optString("site") : "高清优先，卡了自动换";
+                    right = autoSrc ? "当前 · " + sources.optJSONObject(si).optString("site") + cachedText() : "高清优先，卡了自动换";
                 } else {
                     JSONObject s = sources.optJSONObject(i - 1);
                     long bps = s.optLong("bps", 0);
@@ -895,7 +912,7 @@ public class PlayerActivity extends Activity {
                     String res = resName(s.optInt("h", 0));
                     right = (res.length() > 0 ? res + "  ·  " : "") + (bps > 0 ? String.format(java.util.Locale.US, "%.1f MB/s  ·  ", bps / 1048576.0) : bps < 0 ? "不通  ·  " : "")
                             + (e == null ? 0 : e.length()) + " 集";
-                    if (i - 1 == si) right = (res.length() > 0 ? res + "  ·  " : "") + (bps > 0 ? String.format(java.util.Locale.US, "%.1f MB/s  ·  ", bps / 1048576.0) : "") + "正在播放";
+                    if (i - 1 == si) right = (res.length() > 0 ? res + "  ·  " : "") + (bps > 0 ? String.format(java.util.Locale.US, "%.1f MB/s  ·  ", bps / 1048576.0) : "") + "正在播放" + (autoSrc ? "" : cachedText());
                 }
                 if (tab == 0 && i == cur) right = "正在播放";
                 l.setText(left);
