@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
+    <files-path name="fapk" path="apk/" />
     <cache-path name="apk" path="apk/" />
     <external-cache-path name="eapk" path="apk/" />
 </paths>

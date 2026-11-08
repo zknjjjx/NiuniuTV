@@ -19,7 +19,7 @@ button.pri{background:linear-gradient(90deg,#ff5a36,#ffb547);color:#1b0d06;font-
 <div class="card"><h2>推送搜索</h2><p>在这里打字，电视上直接搜索。</p>
 <input id="q" placeholder="片名 / 演员 / 导演"><div class="row"><button class="pri" onclick="search()">发到电视搜索</button></div></div>
 <div class="card"><h2>推送安装 / 升级 App</h2><p>选一个 APK 发到电视安装。推送新版妞妞影视即可就地升级，观看记录保留。首次会要求在电视上允许“安装未知应用”。</p>
-<input type="file" id="apk" accept=".apk,application/vnd.android.package-archive"><div class="row"><button class="pri" onclick="pushApk()">上传并安装</button></div>
+<input type="file" id="apk"><div class="row"><button class="pri" onclick="pushApk()">上传并安装</button></div>
 <p style="margin-top:12px">或粘贴 APK 下载地址（如 GitHub Release 链接），电视自己下载：</p>
 <input id="apkurl" placeholder="https://.../NiuniuTV-x.y.z.apk"><div class="row"><button onclick="pushUrl()">让电视下载并安装</button></div>
 <div id="bar" style="height:6px;border-radius:3px;background:rgba(255,255,255,.1);margin-top:12px;overflow:hidden"><div id="barin" style="height:100%;width:0;background:linear-gradient(90deg,#ff5a36,#ffb547)"></div></div></div>
@@ -46,7 +46,7 @@ function pushApk(){var f=document.getElementById('apk').files[0];if(!f){msg('先
   var x=new XMLHttpRequest();x.open('POST','/api/apk');x.setRequestHeader('Content-Type','application/octet-stream');
   x.upload.onprogress=function(e){if(e.lengthComputable)document.getElementById('barin').style.width=(e.loaded*100/e.total)+'%'};
   x.onload=function(){try{var r=JSON.parse(x.responseText);msg(r.msg||'已发送')}catch(e){msg('已发送')}};x.onerror=function(){msg('上传失败')};x.send(f);msg('上传中…')}
-function pushUrl(){var u=document.getElementById('apkurl').value.trim();if(!u)return;msg('电视正在下载…');post('apkurl',{url:u}).then(function(r){msg(r.msg||'已发送')}).catch(function(){msg('失败')})}
+function pushUrl(){var u=document.getElementById('apkurl').value.trim();if(!u)return;msg('已发给电视…');post('apkurl',{url:u}).then(function(r){msg(r.msg||'已发送')}).catch(function(){msg('失败')})}
 function cleanApk(){post('apkclean').then(function(){msg('已删除');load()})}
 function clearHist(){if(!confirm('确定清除全部观看记录？'))return;post('hist').then(function(){msg('已清除');load()})}
 document.getElementById('q').addEventListener('keydown',function(e){if(e.keyCode===13)search()});

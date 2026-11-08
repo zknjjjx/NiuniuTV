@@ -162,8 +162,12 @@ public class Lan {
                 } else if (act.equals("apkurl")) {
                     final String u = j.optString("url", "").trim();
                     js.run("window.nnRemote&&nnRemote('toast','正在下载安装包…')");
-                    String res = Upd.download(ctx, u, js);
-                    send(out, 200, "application/json; charset=utf-8", res.getBytes("UTF-8"));
+                    // 先回手机，电视在后台下载；不让手机网页一直挂着等
+                    new Thread(new Runnable() { public void run() {
+                        String res = Upd.download(ctx, u, js);
+                        try { JSONObject r = new JSONObject(res); if (!r.optBoolean("ok")) js.run("window.nnRemote&&nnRemote('toast'," + JSONObject.quote(r.optString("msg")) + ")"); } catch (Exception ignored) {}
+                    } }).start();
+                    send(out, 200, "application/json; charset=utf-8", "{\"ok\":true,\"msg\":\"电视开始下载，装好会在电视上弹出安装界面\"}".getBytes("UTF-8"));
                     s.close();
                     return;
                 } else if (act.equals("apkclean")) {

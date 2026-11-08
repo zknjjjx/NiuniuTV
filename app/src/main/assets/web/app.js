@@ -1385,7 +1385,7 @@ const PAGES = {
 let resolving = null;
 const REL = "https://github.com/zknjjjx/NiuniuTV/releases/download/v2-latest/";
 const UPD_JSON = MOB ? "latest-m.json" : "latest.json";
-const relMirrors = (f) => [`https://ghfast.top/${REL}${f}`, `https://gh-proxy.com/${REL}${f}`, REL + f];
+const relMirrors = (f) => [`https://gh-proxy.com/${REL}${f}`, `https://9797.cc.cd/${REL}${f}`, `https://ghfast.top/${REL}${f}`, REL + f];
 const verNum = (v) => String(v || "0").split(".").reduce((a, x) => a * 1e3 + (parseInt(x, 10) || 0), 0);
 const UPD = { latest: null, checking: null };
 function checkUpdate() {
@@ -1422,6 +1422,8 @@ window.nnUpg = (x) => {
   if (typeof x === "number") {
     if (m) m.textContent = x >= 100 ? "\u4E0B\u8F7D\u5B8C\u6210\uFF0C\u8BF7\u5728\u5F39\u51FA\u7684\u754C\u9762\u70B9\u201C\u5B89\u88C5\u201D" : `\u6B63\u5728\u4E0B\u8F7D ${x}%`;
     if (x >= 100) UPD.busy = false;
+  } else if (/^正在/.test(x)) {
+    if (m) m.textContent = x;
   } else {
     UPD.busy = false;
     if (m) m.textContent = "\u5347\u7EA7\u5931\u8D25\uFF1A" + x;

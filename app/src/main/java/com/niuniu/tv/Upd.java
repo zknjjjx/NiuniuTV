@@ -24,7 +24,8 @@ public class Upd {
     static long lastInstall = 0;
 
     static File dir(Context c) {
-        File d = new File(Build.VERSION.SDK_INT >= 24 || c.getExternalCacheDir() == null ? c.getCacheDir() : c.getExternalCacheDir(), "apk");
+        // 放 files 目录：缓存目录在存储紧张时会被系统或清理工具整个删掉，下载到一半就 FileNotFound
+        File d = new File(Build.VERSION.SDK_INT >= 24 || c.getExternalCacheDir() == null ? c.getFilesDir() : c.getExternalCacheDir(), "apk");
         d.mkdirs();
         return d;
     }
@@ -38,7 +39,7 @@ public class Upd {
     static int cleanup(Context c, boolean force) {
         if (!force && System.currentTimeMillis() - lastInstall < 5000) return 0;
         int n = 0;
-        File[] roots = { c.getCacheDir(), c.getExternalCacheDir() };
+        File[] roots = { c.getFilesDir(), c.getCacheDir(), c.getExternalCacheDir() };
         for (File r : roots) {
             if (r == null) continue;
             File[] fs = new File(r, "apk").listFiles();
@@ -52,7 +53,7 @@ public class Upd {
     /** 统计残留安装包：{"n":个数,"mb":大小} */
     static JSONObject info(Context c) {
         int n = 0; long b = 0;
-        File[] roots = { c.getCacheDir(), c.getExternalCacheDir() };
+        File[] roots = { c.getFilesDir(), c.getCacheDir(), c.getExternalCacheDir() };
         for (File r : roots) {
             if (r == null) continue;
             File[] fs = new File(r, "apk").listFiles();
@@ -68,10 +69,14 @@ public class Upd {
     /** 在线升级：按顺序试几个下载地址（加速镜像在前），下完校验是本 App 再安装 */
     static String upgrade(Context c, String[] urls, Lan.Js js) {
         String last = "没有下载地址";
-        for (String u : urls) {
-            String r = download(c, u, js, true);
+        StringBuilder all = new StringBuilder();
+        for (int i = 0; i < urls.length; i++) {
+            js.run("window.nnUpg&&nnUpg(" + JSONObject.quote("正在从线路 " + (i + 1) + " 下载…") + ")");
+            String r = download(c, urls[i], js, true);
             try { if (new JSONObject(r).optBoolean("ok")) return r; last = new JSONObject(r).optString("msg"); } catch (Exception e) { last = r; }
+            all.append(all.length() > 0 ? "；" : "").append("线路 ").append(i + 1).append("：").append(last);
         }
+        if (all.length() > 0) last = all.toString();
         cleanup(c, true);
         js.run("window.nnUpg&&nnUpg(" + JSONObject.quote(last) + ")");
         return err(last);
@@ -97,6 +102,7 @@ public class Upd {
             }
             long total = con.getContentLength(), got = 0; int step = -1;
             InputStream in = con.getInputStream();
+            f.getParentFile().mkdirs();
             OutputStream o = new FileOutputStream(f);
             byte[] b = new byte[65536]; int n;
             while ((n = in.read(b)) > 0) {
@@ -112,7 +118,8 @@ public class Upd {
             return install(c, f, js);
         } catch (Exception e) {
             cleanup(c, true);
-            return err("下载失败：" + e.getClass().getSimpleName());
+            String m = e.getMessage();
+            return err("下载失败：" + e.getClass().getSimpleName() + (m == null ? "" : " " + (m.length() > 60 ? m.substring(0, 60) : m)));
         }
     }
 

@@ -874,7 +874,7 @@ let resolving = null;
 /* ---------------- 在线升级：读 GitHub Release v2-latest 里的 latest.json ---------------- */
 const REL = "https://github.com/zknjjjx/NiuniuTV/releases/download/v2-latest/";
 const UPD_JSON = MOB ? "latest-m.json" : "latest.json";
-const relMirrors = f => [`https://ghfast.top/${REL}${f}`, `https://gh-proxy.com/${REL}${f}`, REL + f];
+const relMirrors = f => [`https://gh-proxy.com/${REL}${f}`, `https://9797.cc.cd/${REL}${f}`, `https://ghfast.top/${REL}${f}`, REL + f];
 const verNum = v => String(v || "0").split(".").reduce((a, x) => a * 1000 + (parseInt(x, 10) || 0), 0);
 const UPD = { latest: null, checking: null };
 function checkUpdate() {
@@ -899,6 +899,7 @@ function askUpgrade() {
 window.nnUpg = x => {
   const m = $("#upMsg");
   if (typeof x === "number") { if (m) m.textContent = x >= 100 ? "下载完成，请在弹出的界面点“安装”" : `正在下载 ${x}%`; if (x >= 100) UPD.busy = false; }
+  else if (/^正在/.test(x)) { if (m) m.textContent = x; }
   else { UPD.busy = false; if (m) m.textContent = "升级失败：" + x; else toast("升级失败：" + x); }
 };
 function markNew() {
