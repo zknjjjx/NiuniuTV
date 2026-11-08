@@ -1138,11 +1138,42 @@ const PAGES = {
     const cidType = (c) => c === 1 ? "movie" : "tv";
     const iqSuggest = (v) => __async(this, null, function* () {
       const d = yield getJSON(`https://suggest.video.iqiyi.com/?if=mobile&key=${encodeURIComponent(v)}`, null, 6e3);
-      return (d.data || []).filter((x) => x.name && [1, 2, 4, 6].indexOf(x.cid) >= 0).slice(0, 18).map((x) => ({ id: "", title: x.name, pic: (x.picture_url || "").replace(/^http:/, "https:"), year: x.year || "", type: cidType(x.cid), sub: [x.cname, x.year].filter(Boolean).join(" \xB7 ") }));
+      const TAGS = { "\u7535\u5F71": 1, "\u7535\u89C6\u5267": 2, "\u52A8\u6F2B": 4, "\u7EFC\u827A": 6 };
+      const seen = {}, out = [];
+      (d.data || []).forEach((x) => {
+        if (!x.name) return;
+        let cid = x.cid;
+        if (!cid) {
+          const t = ((x.presentation_element || {}).tags || []).map((g) => g.name).find((n) => TAGS[n]);
+          if (!t) return;
+          cid = TAGS[t];
+        }
+        if ([1, 2, 4, 6].indexOf(cid) < 0) return;
+        const k = x.name.replace(/\s+/g, "");
+        if (seen[k]) {
+          const o = seen[k];
+          if (!o.pic && x.picture_url) o.pic = x.picture_url.replace(/^http:/, "https:");
+          return;
+        }
+        const cn = { 1: "\u7535\u5F71", 2: "\u7535\u89C6\u5267", 4: "\u52A8\u6F2B", 6: "\u7EFC\u827A" }[cid];
+        out.push(seen[k] = { id: "", title: x.name, pic: (x.picture_url || "").replace(/^http:/, "https:"), year: x.year || "", type: cidType(cid), sub: [x.cname || cn, x.year].filter(Boolean).join(" \xB7 ") });
+      });
+      const items = out.slice(0, 18);
+      const fill = items.filter((it) => !it.pic).slice(0, 8).map((it) => dbSearch(it.title).then((r) => {
+        const hit = r.find((x) => x.title === it.title && (!it.year || !x.year || Math.abs(+x.year - +it.year) <= 1)) || r.find((x) => x.title === it.title);
+        if (hit) Object.assign(it, { id: hit.id, type: hit.type, year: hit.year || it.year, pic: hit.pic || it.pic });
+      }).catch(() => {
+      }));
+      if (fill.length) yield Promise.race([Promise.all(fill), sleep(3500)]);
+      return items;
     });
     const bindIq = (items) => $$("#sres .card").forEach((c, i) => {
       const it = items[i];
       c._ok = () => __async(this, null, function* () {
+        if (it.id) {
+          openDetail(it);
+          return;
+        }
         let hit = null;
         try {
           const r = yield dbSearch(it.title);

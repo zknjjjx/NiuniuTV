@@ -740,13 +740,33 @@ const PAGES = {
     const cidType = c => (c === 1 ? "movie" : "tv");
     const iqSuggest = async v => {
       const d = await getJSON(`https://suggest.video.iqiyi.com/?if=mobile&key=${encodeURIComponent(v)}`, null, 6000);
-      return (d.data || []).filter(x => x.name && [1, 2, 4, 6].indexOf(x.cid) >= 0).slice(0, 18)
-        .map(x => ({ id: "", title: x.name, pic: (x.picture_url || "").replace(/^http:/, "https:"), year: x.year || "", type: cidType(x.cid), sub: [x.cname, x.year].filter(Boolean).join(" · ") }));
+      // cid 0 是联想词条（首字母/全拼常命中这种，如 wdxdjsl→我的兄弟叫顺溜），没有海报，带「电视剧/电影」标签的也要
+      const TAGS = { "电影": 1, "电视剧": 2, "动漫": 4, "综艺": 6 };
+      const seen = {}, out = [];
+      (d.data || []).forEach(x => {
+        if (!x.name) return;
+        let cid = x.cid;
+        if (!cid) { const t = ((x.presentation_element || {}).tags || []).map(g => g.name).find(n => TAGS[n]); if (!t) return; cid = TAGS[t]; }
+        if ([1, 2, 4, 6].indexOf(cid) < 0) return;
+        const k = x.name.replace(/\s+/g, "");
+        if (seen[k]) { const o = seen[k]; if (!o.pic && x.picture_url) o.pic = x.picture_url.replace(/^http:/, "https:"); return; }
+        const cn = { 1: "电影", 2: "电视剧", 4: "动漫", 6: "综艺" }[cid];
+        out.push(seen[k] = { id: "", title: x.name, pic: (x.picture_url || "").replace(/^http:/, "https:"), year: x.year || "", type: cidType(cid), sub: [x.cname || cn, x.year].filter(Boolean).join(" · ") });
+      });
+      const items = out.slice(0, 18);
+      // 没海报的前 8 个去豆瓣按片名补海报和 id（最多等 3.5 秒）
+      const fill = items.filter(it => !it.pic).slice(0, 8).map(it => dbSearch(it.title).then(r => {
+        const hit = r.find(x => x.title === it.title && (!it.year || !x.year || Math.abs(+x.year - +it.year) <= 1)) || r.find(x => x.title === it.title);
+        if (hit) Object.assign(it, { id: hit.id, type: hit.type, year: hit.year || it.year, pic: hit.pic || it.pic });
+      }).catch(() => {}));
+      if (fill.length) await Promise.race([Promise.all(fill), sleep(3500)]);
+      return items;
     };
     // 联想结果没有豆瓣 id：点开时先去豆瓣按片名+年份找，找不到也能直接按片名找片源
     const bindIq = items => $$("#sres .card").forEach((c, i) => {
       const it = items[i];
       c._ok = async () => {
+        if (it.id) { openDetail(it); return; }
         let hit = null;
         try {
           const r = await dbSearch(it.title);
