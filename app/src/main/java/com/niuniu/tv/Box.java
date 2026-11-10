@@ -65,6 +65,23 @@ public class Box {
     private static volatile boolean loading = false;
     private static String recentKey = "";
 
+    /** JSON 解析接口（配置 parses 里 type=1 的）：地址后拼官网播放页，返回 {"url":"…m3u8"} */
+    static class Jx { String name, url; List<String> flags = new ArrayList<>(); Map<String, String> headers = new HashMap<>(); }
+    private static final List<Jx> jxs = Collections.synchronizedList(new ArrayList<Jx>());
+    /** 配置里一个 JSON 解析都没有时（如饭太硬）用的备用，取自各热门接口公开配置 */
+    private static final String[] JX_FALLBACK = {
+        "http://122.228.84.103:7777/api/?key=4Dk5tdayvY6NZufEMG&url=",
+        "http://110.42.7.182:880/api/?key=7e84f07dc78fbb3406d64a1ab7d966b3&url=",
+        "http://43.136.176.188:91/api/?key=4ef232e96172b0bda78d393c695fe7c4&url=",
+        "http://pan.qiaoji8.com/tvbox/neibu.php?url=",
+        "http://json.youguo520.top/fufeng/?url=",
+        "http://lanlan.ckflv.cn/?url=",
+        "https://api.json.icu/api/?key=b1f3b1a9e1c0a42ae969db10bd315a95&url=",
+        "http://pandown.pro/app/kkdy.php?url=",
+        "http://39.104.230.177:1122/lxjx/myyk.php?url=",
+        "http://pan.qiaoji8.com/tvbox/gouzi.php?url=",
+    };
+
     static void init(Context c) { if (app == null) app = c.getApplicationContext(); }
 
     // ---------------- 配置 ----------------
@@ -103,7 +120,7 @@ public class Box {
     }
 
     static void clear() {
-        sites.clear(); byKey.clear(); loadedUrl = ""; cmsJson = "[]";
+        sites.clear(); byKey.clear(); jxs.clear(); loadedUrl = ""; cmsJson = "[]";
         try { jar.clear(); js.clear(); py.clear(); } catch (Throwable ignored) {}
     }
 
@@ -215,6 +232,22 @@ public class Box {
             sites.add(t); byKey.put(t.key, t);
         }
         cmsJson = cms.toString();
+        JSONArray ps = o.optJSONArray("parses");
+        if (ps != null) for (int i = 0; i < ps.length(); i++) {
+            JSONObject q = ps.optJSONObject(i);
+            if (q == null || q.optInt("type", 0) != 1 || !q.optString("url").startsWith("http")) continue;
+            Jx j = new Jx(); j.name = q.optString("name"); j.url = q.optString("url");
+            Object ex = q.opt("ext");
+            if (ex instanceof String && ((String) ex).startsWith("{")) { try { ex = new JSONObject((String) ex); } catch (Exception ignored) {} }
+            if (ex instanceof JSONObject) {
+                JSONArray fl = ((JSONObject) ex).optJSONArray("flag");
+                if (fl != null) for (int k = 0; k < fl.length(); k++) j.flags.add(fl.optString(k));
+                JSONObject h = ((JSONObject) ex).optJSONObject("header");
+                if (h != null) { Iterator<String> it = h.keys(); while (it.hasNext()) { String k = it.next(); j.headers.put(k, h.optString(k)); } }
+            }
+            jxs.add(j);
+        }
+        if (jxs.isEmpty()) for (String u : JX_FALLBACK) { Jx j = new Jx(); j.name = "备用"; j.url = u; jxs.add(j); }
         if (hasPy) { try { py.setConfig(o.toString()); } catch (Throwable e) { Log.w(TAG, "py cfg " + e); } }
     }
 
@@ -362,10 +395,16 @@ public class Box {
             int parse = o.optInt("parse", 0), jx = o.optInt("jx", 0);
             String pre = o.optString("playUrl", "");
             if (url.startsWith("proxy://")) url = url.replace("proxy://", "http://127.0.0.1:" + BoxServer.port + "/proxy?");
-            if (parse == 1 || jx == 1 || !url.startsWith("http")) {
-                if (parse == 0 && jx == 0 && !pre.isEmpty() && url.startsWith("http")) url = pre + url;
-                else { r.err = parse == 1 || jx == 1 ? "需网页解析" : "无地址"; resolved.put(boxUrl, r); return null; }
+            if (!pre.isEmpty() && parse == 0 && jx == 0 && url.startsWith("http")) url = pre + url;
+            else if ((parse == 1 || jx == 1) && url.startsWith("http")) {
+                // 官源：官网播放页 → JSON 解析拿直链（网页解析/嗅探留到 3.1）
+                Res j = jsonJx(flag, url, Math.min(9000, Math.max(5000, timeoutMs)));
+                if (j == null) { r.err = "解析失败"; resolved.put(boxUrl, r); return null; }
+                j.at = r.at; resolved.put(boxUrl, j);
+                String host = host(j.url); if (host != null && !j.headers.isEmpty()) hostHeaders.put(host, j.headers);
+                return j;
             }
+            if (!url.startsWith("http")) { r.err = "无地址"; resolved.put(boxUrl, r); return null; }
             Object h = o.opt("header");
             if (h instanceof String && ((String) h).startsWith("{")) h = new JSONObject((String) h);
             if (h instanceof JSONObject) {
@@ -377,6 +416,45 @@ public class Box {
         } catch (Throwable e) { r.err = e.getClass().getSimpleName(); Log.w(TAG, "resolve " + e); }
         resolved.put(boxUrl, r);
         return r.url == null ? null : r;
+    }
+
+    /** 同时问所有匹配线路的 JSON 解析，谁先给出 http 直链用谁 */
+    static Res jsonJx(String flag, final String page, int timeoutMs) {
+        List<Jx> all = new ArrayList<>(jxs), use = new ArrayList<>();
+        for (Jx j : all) if (j.flags.isEmpty() || j.flags.contains(flag)) use.add(j);
+        if (use.isEmpty()) use = all;
+        if (use.size() > 8) use = use.subList(0, 8);
+        final java.util.concurrent.BlockingQueue<Res> q = new java.util.concurrent.LinkedBlockingQueue<>();
+        final java.util.concurrent.atomic.AtomicInteger left = new java.util.concurrent.atomic.AtomicInteger(use.size());
+        final int to = timeoutMs;
+        List<Future<?>> fs = new ArrayList<>();
+        for (final Jx j : use) fs.add(run.submit(new Runnable() { public void run() {
+            Res r = null;
+            try {
+                okhttp3.Request.Builder b = new okhttp3.Request.Builder().url(j.url + page).header("User-Agent", UA);
+                for (Map.Entry<String, String> e : j.headers.entrySet()) b.header(e.getKey(), e.getValue());
+                okhttp3.Response res = com.github.catvod.net.OkHttp.client(to).newCall(b.build()).execute();
+                String t; try { t = res.body() == null ? "" : res.body().string(); } finally { res.close(); }
+                int a = t.indexOf('{'); JSONObject o = a >= 0 ? lenient(t.substring(a)) : null;
+                if (o != null && o.has("data") && !o.has("url") && o.optJSONObject("data") != null) o = o.optJSONObject("data");
+                String u = o == null ? "" : o.optString("url", "");
+                if (u.startsWith("http") && !u.contains("?url=http")) {
+                    r = new Res(); r.url = u;
+                    String ua = o.optString("user-agent", o.optString("UA", ""));
+                    if (!ua.isEmpty()) r.headers.put("User-Agent", ua);
+                    String rf = o.optString("referer", o.optString("Referer", ""));
+                    if (!rf.isEmpty()) r.headers.put("Referer", rf);
+                    JSONObject h = o.optJSONObject("header"); if (h == null) h = o.optJSONObject("headers");
+                    if (h != null) { Iterator<String> it = h.keys(); while (it.hasNext()) { String k = it.next(); r.headers.put(k, h.optString(k)); } }
+                }
+            } catch (Throwable e) { Log.w(TAG, "jx " + j.name + " " + e); }
+            if (r != null) q.offer(r);
+            if (left.decrementAndGet() == 0) { Res none = new Res(); q.offer(none); }
+        } }));
+        Res got = null;
+        try { got = q.poll(timeoutMs + 500, TimeUnit.MILLISECONDS); } catch (InterruptedException ignored) {}
+        for (Future<?> f : fs) f.cancel(true);
+        return got == null || got.url == null ? null : got;
     }
 
     /** 播放器、预下载、测速发请求时补上爬虫要求的请求头（按域名） */
