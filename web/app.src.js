@@ -32,9 +32,10 @@ function srcTier(s) {
   const h = s.h || 0, b = s.bps || 0;
   if (b < 0) return 0;
   if (b === 0) return 1;                 // 未测
-  const r = h >= 1000 ? 3 : (h >= 700 || h === 0) ? 2 : 1;
-  const need = r === 3 ? 0.9 * MB : r === 2 ? 0.45 * MB : 0;
-  return (b >= need ? r : 1) + 1;        // 4=1080流畅 3=720流畅 2=其余能通
+  let r = h >= 1000 ? 3 : (h >= 700 || h === 0) ? 2 : 1;
+  if (r === 3 && b < 0.9 * MB) r = 2;    // 1080 速度不够：降到 720 那档，不跟低清混
+  if (r === 2 && b < 0.45 * MB) r = 1;
+  return r + 1;                          // 4=1080流畅 3=720流畅（含慢些的1080） 2=其余能通
 }
 function srcScore(s) { return srcTier(s) * 1e10 + (s.bps > 0 ? s.bps : s.bps == null ? -((s.ms || 0) + (s.rank || 0) * 30) : 0); }
 function probe(url) {
