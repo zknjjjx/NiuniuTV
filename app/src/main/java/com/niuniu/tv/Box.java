@@ -83,6 +83,21 @@ public class Box {
             loading = true;
             File cache = new File(dir("cfg"), MD5.string2MD5(url) + ".json");
             String text = null, base = url;
+            if (!force && cache.exists()) {  // 先用上次成功的配置马上开用，后台再更新缓存（下次生效）
+                try {
+                    String all = new String(read(cache), "UTF-8");
+                    int i = all.indexOf('\n');
+                    parse(all.substring(0, i), all.substring(i + 1));
+                    loadedUrl = url;
+                    state = sites.size() + " 个爬虫源";
+                    final String u = url; final File cf = cache;
+                    new Thread(() -> {
+                        try { String[] g = fetchConfig(u, 0); if (g[0] != null) write(cf, (g[1] + "\n" + g[0]).getBytes("UTF-8")); }
+                        catch (Throwable e) { Log.w(TAG, "config refresh: " + e); }
+                    }).start();
+                    r.put("ok", true); r.put("n", sites.size()); r.put("state", state); return r;
+                } catch (Throwable e) { Log.w(TAG, "config cache: " + e); clear(); }
+            }
             try {
                 String[] got = fetchConfig(url, 0);
                 text = got[0]; base = got[1];

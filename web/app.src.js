@@ -170,20 +170,39 @@ const BOX = { sites: [], cms: [], state: "", ready: null };
 function nnCall(fn, args) {
   return new Promise(r => { const id = "x" + (++seq); cbs[id] = r; NN[fn].apply(NN, [id].concat(args)); });
 }
+function boxUrls(p) {
+  let urls = [];
+  p.urls.forEach(u => { urls = urls.concat(/githubusercontent|jsdelivr/.test(u) ? mirrors(u) : [u]); });
+  return urls;
+}
+/* 选中的接口拉不下来（或一个源都没有）就自动顺延到下一个预设，仍然一次只用一个 */
 function boxLoad(force) {
   if (!APP || !NN.boxLoad) return Promise.resolve(BOX);
   const sel = cfg.get("boxSel", BOX_DEF);
-  let urls = [];
-  if (sel === "off") urls = [""];
-  else if (sel === "custom") urls = [cfg.get("boxUrl", "")];
-  else { const p = BOX_PRESETS.find(x => x.name === sel) || BOX_PRESETS[0]; p.urls.forEach(u => { urls = urls.concat(/githubusercontent|jsdelivr/.test(u) ? mirrors(u) : [u]); }); }
-  BOX.state = "加载中…";
+  const plan = [];  // [名称, 地址们]
+  if (sel === "off") plan.push(["", [""]]);
+  else {
+    if (sel === "custom") plan.push(["自定义", [cfg.get("boxUrl", "")]]);
+    const first = BOX_PRESETS.find(x => x.name === sel);
+    if (first) plan.push([first.name, boxUrls(first)]);
+    BOX_PRESETS.forEach(p => { if (p !== first) plan.push([p.name, boxUrls(p)]); });
+  }
+  BOX.state = "加载中…"; BOX.using = "";
   BOX.ready = (async () => {
-    for (let i = 0; i < urls.length; i++) {
-      const x = await nnCall("boxLoad", [urls[i], !!force]);
-      let r = {}; try { r = JSON.parse(x.body); } catch (e) {}
-      BOX.state = r.state || "加载失败";
-      if (r.ok || !urls[i]) break;
+    for (let k = 0; k < plan.length; k++) {
+      let ok = false;
+      for (let i = 0; i < plan[k][1].length; i++) {
+        const x = await nnCall("boxLoad", [plan[k][1][i], !!force]);
+        let r = {}; try { r = JSON.parse(x.body); } catch (e) {}
+        BOX.state = r.state || "加载失败";
+        if (!plan[k][1][i]) { ok = true; break; }
+        if (r.ok) {
+          let n = 0; try { n = JSON.parse(NN.boxSites()).length + JSON.parse(NN.boxCms()).length; } catch (e) {}
+          if (n) { ok = true; break; }
+          BOX.state = "接口里没有可用的源";
+        }
+      }
+      if (ok) { BOX.using = plan[k][0]; break; }
     }
     try { BOX.sites = JSON.parse(NN.boxSites()); BOX.cms = parseSites(JSON.parse(NN.boxCms())); } catch (e) { BOX.sites = []; BOX.cms = []; }
     return BOX;
@@ -994,7 +1013,8 @@ let resolving = null;
 function boxLabel() {
   const sel = cfg.get("boxSel", BOX_DEF);
   if (sel === "off") return "不用爬虫源";
-  const nm = sel === "custom" ? cfg.get("boxUrl", "自定义").replace(/^https?:\/\//, "").slice(0, 40) : sel;
+  let nm = sel === "custom" ? cfg.get("boxUrl", "自定义").replace(/^https?:\/\//, "").slice(0, 40) : sel;
+  if (BOX.using && BOX.using !== (sel === "custom" ? "自定义" : sel)) nm += ` 打不开，暂用 ${BOX.using}`;
   return `${nm} · ${BOX.state || "未加载"}${BOX.sites.length ? "（" + ["jar", "js", "py"].map(k => [k, BOX.sites.filter(s => s.kind === k).length]).filter(x => x[1]).map(x => `${x[0] === "jar" ? "Java" : x[0] === "js" ? "JS" : "Python"} ${x[1]}`).join("、") + "）" : ""}`;
 }
 

@@ -301,29 +301,60 @@ function nnCall(fn, args) {
     NN[fn].apply(NN, [id].concat(args));
   });
 }
+function boxUrls(p) {
+  let urls = [];
+  p.urls.forEach((u) => {
+    urls = urls.concat(/githubusercontent|jsdelivr/.test(u) ? mirrors(u) : [u]);
+  });
+  return urls;
+}
 function boxLoad(force) {
   if (!APP || !NN.boxLoad) return Promise.resolve(BOX);
   const sel = cfg.get("boxSel", BOX_DEF);
-  let urls = [];
-  if (sel === "off") urls = [""];
-  else if (sel === "custom") urls = [cfg.get("boxUrl", "")];
+  const plan = [];
+  if (sel === "off") plan.push(["", [""]]);
   else {
-    const p = BOX_PRESETS.find((x) => x.name === sel) || BOX_PRESETS[0];
-    p.urls.forEach((u) => {
-      urls = urls.concat(/githubusercontent|jsdelivr/.test(u) ? mirrors(u) : [u]);
+    if (sel === "custom") plan.push(["\u81EA\u5B9A\u4E49", [cfg.get("boxUrl", "")]]);
+    const first = BOX_PRESETS.find((x) => x.name === sel);
+    if (first) plan.push([first.name, boxUrls(first)]);
+    BOX_PRESETS.forEach((p) => {
+      if (p !== first) plan.push([p.name, boxUrls(p)]);
     });
   }
   BOX.state = "\u52A0\u8F7D\u4E2D\u2026";
+  BOX.using = "";
   BOX.ready = (() => __async(this, null, function* () {
-    for (let i = 0; i < urls.length; i++) {
-      const x = yield nnCall("boxLoad", [urls[i], !!force]);
-      let r = {};
-      try {
-        r = JSON.parse(x.body);
-      } catch (e) {
+    for (let k = 0; k < plan.length; k++) {
+      let ok = false;
+      for (let i = 0; i < plan[k][1].length; i++) {
+        const x = yield nnCall("boxLoad", [plan[k][1][i], !!force]);
+        let r = {};
+        try {
+          r = JSON.parse(x.body);
+        } catch (e) {
+        }
+        BOX.state = r.state || "\u52A0\u8F7D\u5931\u8D25";
+        if (!plan[k][1][i]) {
+          ok = true;
+          break;
+        }
+        if (r.ok) {
+          let n = 0;
+          try {
+            n = JSON.parse(NN.boxSites()).length + JSON.parse(NN.boxCms()).length;
+          } catch (e) {
+          }
+          if (n) {
+            ok = true;
+            break;
+          }
+          BOX.state = "\u63A5\u53E3\u91CC\u6CA1\u6709\u53EF\u7528\u7684\u6E90";
+        }
       }
-      BOX.state = r.state || "\u52A0\u8F7D\u5931\u8D25";
-      if (r.ok || !urls[i]) break;
+      if (ok) {
+        BOX.using = plan[k][0];
+        break;
+      }
     }
     try {
       BOX.sites = JSON.parse(NN.boxSites());
@@ -1584,7 +1615,8 @@ let resolving = null;
 function boxLabel() {
   const sel = cfg.get("boxSel", BOX_DEF);
   if (sel === "off") return "\u4E0D\u7528\u722C\u866B\u6E90";
-  const nm = sel === "custom" ? cfg.get("boxUrl", "\u81EA\u5B9A\u4E49").replace(/^https?:\/\//, "").slice(0, 40) : sel;
+  let nm = sel === "custom" ? cfg.get("boxUrl", "\u81EA\u5B9A\u4E49").replace(/^https?:\/\//, "").slice(0, 40) : sel;
+  if (BOX.using && BOX.using !== (sel === "custom" ? "\u81EA\u5B9A\u4E49" : sel)) nm += ` \u6253\u4E0D\u5F00\uFF0C\u6682\u7528 ${BOX.using}`;
   return `${nm} \xB7 ${BOX.state || "\u672A\u52A0\u8F7D"}${BOX.sites.length ? "\uFF08" + ["jar", "js", "py"].map((k) => [k, BOX.sites.filter((s) => s.kind === k).length]).filter((x) => x[1]).map((x) => `${x[0] === "jar" ? "Java" : x[0] === "js" ? "JS" : "Python"} ${x[1]}`).join("\u3001") + "\uFF09" : ""}`;
 }
 const REL = "https://github.com/zknjjjx/NiuniuTV/releases/download/v2-latest/";
