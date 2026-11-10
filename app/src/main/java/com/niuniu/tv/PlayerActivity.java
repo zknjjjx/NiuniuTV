@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
+import android.content.Context;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.os.Handler;
@@ -86,12 +87,22 @@ public class PlayerActivity extends Activity {
         if (player == null) return;
         Pre.position(curUrl, player.getCurrentPosition(), player.getBufferedPosition(),
                 started && player.getPlaybackState() == Player.STATE_READY);
+        crowdCheck();
+    }
+    /** 片源嫌连接多、退回单路后：1080 单路不到 0.9 MB/s 撑不住，缓存剩不到 1 分钟就主动换源，不等卡住 */
+    private void crowdCheck() {
+        if (!started || !autoSrc || sources == null || sources.length() < 2 || !Pre.crowded(curUrl)) return;
+        JSONObject s = sources.optJSONObject(si);
+        if (s == null || s.optInt("h", 0) < 1000 || s.optLong("bps", 0) >= 0.9 * 1048576) return;
+        if (Pre.cachedAheadMs(curUrl, player.getCurrentPosition()) >= 60000) return;
+        switchSource("片源限制多路下载，单路不够 1080");
     }
     private final Runnable saver = new Runnable() { public void run() { save(); h.postDelayed(this, 10000); } };
 
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
+        appCtx = getApplicationContext();
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         try {
             data = new JSONObject(getIntent().getStringExtra("data"));
@@ -864,12 +875,17 @@ public class PlayerActivity extends Activity {
     }
 
     /** 与详情页一致：1080 以上流畅 > 720(含未知)流畅 > 其余能通；同档按速度 */
+    private static Context appCtx;
+    private static boolean crowdHost(JSONObject s) {
+        try { return appCtx != null && Pre.isCrowdHost(appCtx, s.getJSONArray("eps").getJSONObject(0).optString("url")); } catch (Exception e) { return false; }
+    }
     private static int tierOf(JSONObject s) {
         int hh = s.optInt("h", 0); long b = s.optLong("bps", 0);
         if (b < 0) return 0;
         if (b == 0) return 1;
         int r = hh >= 1000 ? 3 : (hh >= 700 || hh == 0) ? 2 : 1;
-        double need = r == 3 ? 0.9 * 1048576 : r == 2 ? 0.45 * 1048576 : 0;
+        // 5 路预下载：1080 单路 0.2 MB/s 就够；嫌连接多的域名只能单路，要 0.9 才排在 720 前
+        double need = r == 3 ? (crowdHost(s) ? 0.9 : 0.2) * 1048576 : r == 2 ? 0.45 * 1048576 : 0;
         return (b >= need ? r : 1) + 1;
     }
     private int bestSource() {

@@ -33,10 +33,14 @@ function srcTier(s) {
   if (b < 0) return 0;
   if (b === 0) return 1;                 // 未测
   let r = h >= 1000 ? 3 : (h >= 700 || h === 0) ? 2 : 1;
-  if (r === 3 && b < 0.9 * MB) r = 2;    // 1080 速度不够：降到 720 那档，不跟低清混
+  // 有 5 路预下载，1080 单路 0.2 MB/s 就排在 720 前；嫌连接多的域名只能单路，要 0.9 才行，否则排到 720 后
+  if (r === 3 && b < (isCrowd(s) ? 0.9 : 0.2) * MB) r = 1;
   if (r === 2 && b < 0.45 * MB) r = 1;
-  return r + 1;                          // 4=1080流畅 3=720流畅（含慢些的1080） 2=其余能通
+  return r + 1;                          // 4=1080 3=720流畅 2=其余能通
 }
+let CROWD = {};
+function loadCrowd() { try { const o = JSON.parse((APP && NN.cfg && NN.cfg("crowd")) || "{}"), t = Date.now(); CROWD = {}; Object.keys(o).forEach(k => { if (t - o[k] < 7 * 864e5) CROWD[k] = 1; }); } catch (e) { CROWD = {}; } }
+function isCrowd(s) { const m = /^https?:\/\/([^\/:?#]+)/i.exec((s.eps && s.eps[0] && s.eps[0].url) || ""); return !!(m && CROWD[m[1].toLowerCase()]); }
 function srcScore(s) { return srcTier(s) * 1e10 + (s.bps > 0 ? s.bps : s.bps == null ? -((s.ms || 0) + (s.rank || 0) * 30) : 0); }
 function probe(url) {
   if (!APP) return Promise.resolve({ bps: 0 });
@@ -605,10 +609,10 @@ const PAGES = {
       lamp.className = "lamp " + (ok.length ? "ok" : "wait");
       el.textContent = `找到 ${st.srcs.length} 个片源${st.done ? "" : "（还在找）"}${st.cam ? `，已滤掉 ${st.cam} 个枪版` : ""}` + (ok.length ? ` · 最快「${ok[0].site}」${(ok[0].bps / 1048576).toFixed(1)} MB/s` : st.probing ? " · 测速中" : "");
     };
-    // 后台测速：拿到片源就测，3 路并发（原生层排队）
+    // 后台测速：拿到片源就测，电视同时测 6 个、手机 3 个（原生层排队）
     const probeQ = [];
     const pump = () => {
-      while (st.probing < 3 && probeQ.length) {
+      while (st.probing < (MOB ? 3 : 6) && probeQ.length) {
         const s = probeQ.shift();
         st.probing++;
         probe(s.eps[0].url).then(r => { s.bps = r.bps; s.h = r.h || 0; }).then(() => { st.probing--; st.probed++; status(); pump(); });
@@ -647,6 +651,7 @@ const PAGES = {
     function rank(ei) {
       const need = ei + 1, maxEp = Math.max.apply(null, st.srcs.map(s => s.eps.length));
       const score = srcScore;
+      loadCrowd();
       return st.srcs.slice().sort((a, b) => {
         const ha = a.eps.length >= need ? 1 : 0, hb = b.eps.length >= need ? 1 : 0;
         if (ha !== hb) return hb - ha;

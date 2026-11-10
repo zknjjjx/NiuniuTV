@@ -28,7 +28,7 @@ import java.util.concurrent.Executors;
 public class MainActivity extends Activity {
     private WebView web;
     private final ExecutorService pool = Executors.newFixedThreadPool(16);
-    private final ExecutorService probes = Executors.newFixedThreadPool(3);
+    private final ExecutorService probes = Executors.newFixedThreadPool(6);
     private final ExecutorService dbPool = Executors.newFixedThreadPool(6);  // 豆瓣单独排队，不被片源搜索堵住
     private long lastBack = 0;
     private Lan lan;

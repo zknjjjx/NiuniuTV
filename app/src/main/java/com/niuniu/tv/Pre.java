@@ -151,7 +151,55 @@ public class Pre {
 
     /** 播放器遇到 HTTP 错误 / 连不上：可能是对方嫌连接多，这一集预下载退回单路 */
     static synchronized void backoff(String url) {
-        if (job != null && job.url.equals(url)) job.lanes = 1;
+        if (job != null && job.url.equals(url)) {
+            if (job.lanes > 1 && job.everReady) { job.crowded = true; markCrowd(url); }
+            job.lanes = 1;
+        }
+    }
+
+    /** 这一集的片源嫌连接多、已退到 1~2 路 */
+    static synchronized boolean crowded(String url) {
+        return job != null && job.url.equals(url) && job.crowded;
+    }
+
+    /** 片源服务器拒绝了我们（像是嫌连接多）：403/429/503/509、连接被拒或被重置 */
+    static boolean rejected(Throwable e) {
+        for (int i = 0; e != null && i < 6; i++, e = e.getCause()) {
+            if (e instanceof androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException) {
+                int c = ((androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException) e).responseCode;
+                return c == 403 || c == 429 || c == 503 || c == 509;
+            }
+            if (e instanceof java.net.ConnectException) return true;
+            if (e instanceof java.net.SocketException && String.valueOf(e.getMessage()).toLowerCase().contains("reset")) return true;
+        }
+        return false;
+    }
+
+    /** 记住嫌连接多的片源域名（7 天），选源时这类 1080 要单路 ≥0.9 MB/s 才排在 720 前 */
+    static void markCrowd(String url) {
+        try {
+            if (app == null) return;
+            String host = Uri.parse(url).getHost();
+            if (host == null || host.isEmpty()) return;
+            android.content.SharedPreferences sp = Lan.cfg(app);
+            org.json.JSONObject o;
+            try { o = new org.json.JSONObject(sp.getString("crowd", "{}")); } catch (Exception e) { o = new org.json.JSONObject(); }
+            long now = System.currentTimeMillis();
+            org.json.JSONObject n = new org.json.JSONObject();
+            java.util.Iterator<String> it = o.keys();
+            while (it.hasNext()) { String k = it.next(); long t = o.optLong(k); if (now - t < 7 * 86400_000L) n.put(k, t); }
+            n.put(host.toLowerCase(java.util.Locale.US), now);
+            sp.edit().putString("crowd", n.toString()).apply();
+        } catch (Throwable ignore) {}
+    }
+
+    static boolean isCrowdHost(Context c, String url) {
+        try {
+            String host = Uri.parse(url).getHost();
+            if (host == null) return false;
+            long t = new org.json.JSONObject(Lan.cfg(c).getString("crowd", "{}")).optLong(host.toLowerCase(java.util.Locale.US), 0);
+            return t > 0 && System.currentTimeMillis() - t < 7 * 86400_000L;
+        } catch (Throwable e) { return false; }
     }
 
     /** 最近 ms 毫秒内后台下载还有进账 */
@@ -186,7 +234,8 @@ public class Pre {
     static class Job extends Thread {
         final String url;
         volatile long posUs, aheadUs, lastData, bufUs;
-        volatile boolean dead, gated, ready, everReady;
+        volatile boolean dead, gated, ready, everReady, crowded;
+        int rejects; long rejectAt;
         volatile int lanes = WORKERS;
         final java.util.concurrent.ConcurrentHashMap<Seg, CacheWriter> active = new java.util.concurrent.ConcurrentHashMap<>();
         final List<Thread> helpers = new ArrayList<>();
@@ -282,11 +331,24 @@ public class Pre {
                     cur.done = true;
                 } catch (Exception e) {
                     if (dead) break;
-                    if (gated && !ready) { sleepQ(300); continue; }   // 被播放器让路取消的，不算失败
+                    if (rejected(e)) onReject(cur);
+                    else if (gated && !ready) { sleepQ(300); continue; }   // 被播放器让路取消的，不算失败
                     synchronized (this) { if (++cur.fails >= 3) cur.done = true; }   // 一个分片连失败 3 次就跳过，交给播放器自己拉
                     if (!cur.done) sleepQ(1000L * cur.fails);
                 } finally { active.remove(cur); cur.busy = false; }
             }
+        }
+
+        /** 一分钟内被拒两次：5 路 → 2 路 → 1 路，并记下这个域名 */
+        synchronized void onReject(Seg s) {
+            long now = SystemClock.uptimeMillis();
+            if (now - rejectAt > 60_000L) rejects = 0;
+            rejectAt = now;
+            if (++rejects < 2 || lanes <= 1) return;
+            rejects = 0;
+            lanes = lanes > 2 ? 2 : 1;
+            crowded = true;
+            markCrowd(url);
         }
 
         Seg seg(Uri u, long off, long len, long st, long en) {
@@ -302,9 +364,8 @@ public class Pre {
             long p = posUs, lim = p + aheadUs, ahead = 0, from = p;
             boolean near = false;
             if (gated) {
-                if (!everReady) return null;   // 起播前一律让路
-                if (!ready || bufUs - p < 15_000_000L) {
-                    // 卡顿/缓冲不足：播放器自己拉眼前这一段，我们并行帮它拉后面几段
+                if (!everReady || !ready || bufUs - p < 15_000_000L) {
+                    // 起播前、卡顿或缓冲不足：播放器自己拉眼前这一段，我们并行帮它拉后面 30 秒
                     near = true; lim = p + NEAR_US;
                 } else from = bufUs;   // 播放器手里已有的不重复拉，从它缓冲的尽头往后下
             }
