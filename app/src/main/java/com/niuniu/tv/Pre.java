@@ -81,9 +81,20 @@ public class Pre {
         f.delete();
     }
 
-    static DefaultHttpDataSource.Factory http() {
-        return new DefaultHttpDataSource.Factory().setUserAgent(Net.UA).setAllowCrossProtocolRedirects(true)
+    static DataSource.Factory http() {
+        final DefaultHttpDataSource.Factory f = new DefaultHttpDataSource.Factory().setAllowCrossProtocolRedirects(true)
                 .setConnectTimeoutMs(10000).setReadTimeoutMs(15000);
+        // 默认 UA；爬虫源要求的请求头（Referer、UA 等）按域名补上
+        return new androidx.media3.datasource.ResolvingDataSource.Factory(f, new androidx.media3.datasource.ResolvingDataSource.Resolver() {
+            @NonNull @Override public DataSpec resolveDataSpec(@NonNull DataSpec s) {
+                Map<String, String> h = new java.util.HashMap<>();
+                h.put("User-Agent", Net.UA);
+                Map<String, String> bh = Box.headersFor(s.uri.toString());
+                if (bh != null) h.putAll(bh);
+                h.putAll(s.httpRequestHeaders);
+                return s.withRequestHeaders(h);
+            }
+        });
     }
 
     static boolean isList(Uri u) {
@@ -94,7 +105,7 @@ public class Pre {
     /** 播放器用：m3u8 列表直连（交给去广告），分片走磁盘缓存 */
     static DataSource.Factory playerFactory(Context c) {
         final SimpleCache sc = cache(c);
-        final DefaultHttpDataSource.Factory http = http();
+        final DataSource.Factory http = http();
         return new AdFilter.Factory(new DataSource.Factory() {
             @NonNull @Override public DataSource createDataSource() {
                 return new Router(http.createDataSource(), new CacheDataSource(sc, http.createDataSource(),

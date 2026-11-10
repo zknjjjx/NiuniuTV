@@ -55,6 +55,8 @@ public class Net {
             c.setConnectTimeout(Math.min(timeout, 8000));
             c.setReadTimeout(timeout);
             c.setRequestProperty("User-Agent", UA);
+            java.util.Map<String, String> bh = Box.headersFor(u);   // 爬虫源要求的 Referer、UA 等
+            if (bh != null) for (java.util.Map.Entry<String, String> e : bh.entrySet()) c.setRequestProperty(e.getKey(), e.getValue());
             if (headers != null) {
                 Iterator<String> it = headers.keys();
                 while (it.hasNext()) { String k = it.next(); c.setRequestProperty(k, headers.optString(k)); }
@@ -106,6 +108,12 @@ public class Net {
         long t0 = System.currentTimeMillis();
         try {
             String u = url;
+            if (Box.isBox(u)) {   // 爬虫源：先向爬虫要真实地址
+                Box.Res br = Box.resolve(u, Math.max(3000, budgetMs));
+                if (br == null) throw new Exception("resolve");
+                u = br.url;
+                o.put("ttfr", System.currentTimeMillis() - t0);
+            }
             String seg = null, keyUri = null, ivHex = null;
             long seq = 0, segSeq = 0;
             for (int depth = 0; depth < 3 && seg == null; depth++) {

@@ -30,6 +30,8 @@ public class MainActivity extends Activity {
     private final ExecutorService pool = Executors.newFixedThreadPool(16);
     private final ExecutorService probes = Executors.newFixedThreadPool(6);
     private final ExecutorService dbPool = Executors.newFixedThreadPool(6);  // 豆瓣单独排队，不被片源搜索堵住
+    private final ExecutorService boxPool = Executors.newFixedThreadPool(8);  // 爬虫源搜索、详情
+    private final ExecutorService boxCfg = Executors.newSingleThreadExecutor();
     private long lastBack = 0;
     private Lan lan;
     private boolean phone;
@@ -39,6 +41,8 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle b) {
         super.onCreate(b);
         Net.init();
+        Box.init(this);
+        BoxServer.start();
         new Thread(new Runnable() { public void run() { Pre.cache(MainActivity.this); } }).start();   // 每次开 App 清空播放缓存
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         web = new WebView(this);
@@ -156,8 +160,51 @@ public class MainActivity extends Activity {
         /** 详情页测速定下片源后预载开头几分钟；地址变了就删旧缓存换新的 */
         @JavascriptInterface
         public void prefetch(final String url, final double posMs) {
-            pool.execute(new Runnable() { public void run() { Pre.start(MainActivity.this, url, (long) posMs, Pre.PRELOAD_MS); } });
+            pool.execute(new Runnable() { public void run() {
+                String u = url;
+                if (Box.isBox(u)) { Box.Res r = Box.resolve(u, 10000); if (r == null) return; u = r.url; }
+                Pre.start(MainActivity.this, u, (long) posMs, Pre.PRELOAD_MS);
+            } });
         }
+
+        /** TVBox 接口：加载配置与爬虫（url 为空即停用）；结果 {ok,n,state} 回调 */
+        @JavascriptInterface
+        public void boxLoad(final String id, final String url, final boolean force) {
+            boxCfg.execute(new Runnable() { public void run() {
+                String r = Box.load(url, force).toString();
+                js("window.__nnCb&&__nnCb(" + JSONObject.quote(id) + ",200," + JSONObject.quote(r) + ",0)");
+            } });
+        }
+
+        @JavascriptInterface
+        public String boxSites() { return Box.sitesJson(); }
+
+        @JavascriptInterface
+        public String boxCms() { return Box.cmsJson(); }
+
+        @JavascriptInterface
+        public String boxState() { return Box.state(); }
+
+        /** 在某个爬虫源里搜片名，原样回传爬虫的 JSON */
+        @JavascriptInterface
+        public void boxSearch(final String id, final String key, final String wd, final int timeout) {
+            boxPool.execute(new Runnable() { public void run() {
+                long t0 = System.currentTimeMillis();
+                String r = Box.search(key, wd, timeout <= 0 ? 10000 : timeout);
+                js("window.__nnCb&&__nnCb(" + JSONObject.quote(id) + ",200," + JSONObject.quote(r) + "," + (System.currentTimeMillis() - t0) + ")");
+            } });
+        }
+
+        @JavascriptInterface
+        public void boxDetail(final String id, final String key, final String vid, final int timeout) {
+            boxPool.execute(new Runnable() { public void run() {
+                String r = Box.detail(key, vid, timeout <= 0 ? 10000 : timeout);
+                js("window.__nnCb&&__nnCb(" + JSONObject.quote(id) + ",200," + JSONObject.quote(r) + ",0)");
+            } });
+        }
+
+        @JavascriptInterface
+        public String boxUrl(String key, String flag, String vid) { return Box.boxUrl(key, flag, vid); }
 
         @JavascriptInterface
         public String history() { return Hist.all(MainActivity.this).toString(); }
@@ -263,6 +310,7 @@ public class MainActivity extends Activity {
         pool.shutdownNow();
         if (lan != null) lan.stop();
         probes.shutdownNow();
+        boxPool.shutdownNow();
         dbPool.shutdownNow();
         if (web != null) { web.destroy(); web = null; }
         super.onDestroy();

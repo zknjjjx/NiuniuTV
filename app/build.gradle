@@ -1,4 +1,7 @@
-plugins { id 'com.android.application' }
+plugins {
+    id 'com.android.application'
+    id 'com.chaquo.python'
+}
 
 android {
     lint { checkReleaseBuilds false; abortOnError false }
@@ -8,8 +11,15 @@ android {
         applicationId 'com.niuniu.tv2'
         minSdk 21
         targetSdk 30
-        versionCode 52
-        versionName '2.9.3'
+        versionCode 60
+        versionName '3.0.0'
+        multiDexEnabled true
+        // 爬虫 jar 里的 .so 和 Python 只有 ARM；x86_64 给模拟器调试用
+        ndk { abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86_64' }
+    }
+    packagingOptions {
+        jniLibs { useLegacyPackaging true }
+        resources { excludes += ['META-INF/DEPENDENCIES', 'META-INF/beans.xml', 'META-INF/*.kotlin_module'] }
     }
     signingConfigs {
         niuniu {
@@ -51,4 +61,29 @@ dependencies {
     implementation "androidx.annotation:annotation:1.8.2"
     implementation "com.google.zxing:core:3.3.3"
     implementation "androidx.core:core:1.9.0"
+    // ---- TVBox 爬虫宿主：jar 爬虫编译时依赖这些类，必须原名保留（不混淆） ----
+    implementation project(':quickjs')
+    implementation 'com.squareup.okhttp3:okhttp:3.12.13'
+    implementation 'com.google.code.gson:gson:2.10.1'
+    implementation 'org.jsoup:jsoup:1.15.3'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.multidex:multidex:2.0.1'
+    implementation 'org.slf4j:slf4j-api:1.7.36'
+}
+
+chaquopy {
+    defaultConfig {
+        version = "3.10"
+        buildPython("python3.10")
+        pip {
+            install "lxml"
+            install "ujson"
+            install "pyquery==2.0.0"
+            install "requests"
+            install "jsonpath"
+            install "cachetools"
+            install "pycryptodome"
+            install "beautifulsoup4"
+        }
+    }
 }

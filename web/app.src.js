@@ -151,6 +151,81 @@ async function loadSources(force) {
   return SRC;
 }
 
+/* ---------------- TVBox 接口（爬虫源）：原生层加载 jar / JS / Python 爬虫，这里负责搜索与组装片源 ---------------- */
+const BOX_PRESETS = [
+  { name: "饭太硬", urls: ["http://www.饭太硬.com/tv", "http://www.饭太硬.net/tv", "http://fty.888484.xyz/tv", "http://fty.xxooo.cf/tv"] },
+  { name: "王二小", urls: ["http://tvbox.王二小放牛娃.top/", "https://9280.kstore.vip/newwex.json", "http://tv.999888987.xyz/"] },
+  { name: "肥猫", urls: ["http://肥猫.net/", "http://hello.肥猫.com/", "https://6296.kstore.vip/fm.gif"] },
+  { name: "摸鱼儿", urls: ["http://我不是.摸鱼儿.com", "http://我不是.摸鱼儿.top", "http://fish.y456y.com"] },
+  { name: "南风", urls: ["https://raw.githubusercontent.com/yoursmile66/TVBox/main/XC.json"] },
+  { name: "菜妮丝", urls: ["https://tv.菜妮丝.top"] },
+  { name: "小盒子", urls: ["http://xhztv.top/xhz", "http://xhztv.top/4k.json"] },
+  { name: "高天流云", urls: ["https://raw.githubusercontent.com/gaotianliuyun/gao/master/js.json"] },
+];
+const BOX_DEF = "饭太硬";
+const BOX = { sites: [], cms: [], state: "", ready: null };
+function nnCall(fn, args) {
+  return new Promise(r => { const id = "x" + (++seq); cbs[id] = r; NN[fn].apply(NN, [id].concat(args)); });
+}
+function boxLoad(force) {
+  if (!APP || !NN.boxLoad) return Promise.resolve(BOX);
+  const sel = cfg.get("boxSel", BOX_DEF);
+  let urls = [];
+  if (sel === "off") urls = [""];
+  else if (sel === "custom") urls = [cfg.get("boxUrl", "")];
+  else { const p = BOX_PRESETS.find(x => x.name === sel) || BOX_PRESETS[0]; p.urls.forEach(u => { urls = urls.concat(/githubusercontent|jsdelivr/.test(u) ? mirrors(u) : [u]); }); }
+  BOX.state = "加载中…";
+  BOX.ready = (async () => {
+    for (let i = 0; i < urls.length; i++) {
+      const x = await nnCall("boxLoad", [urls[i], !!force]);
+      let r = {}; try { r = JSON.parse(x.body); } catch (e) {}
+      BOX.state = r.state || "加载失败";
+      if (r.ok || !urls[i]) break;
+    }
+    try { BOX.sites = JSON.parse(NN.boxSites()); BOX.cms = parseSites(JSON.parse(NN.boxCms())); } catch (e) { BOX.sites = []; BOX.cms = []; }
+    return BOX;
+  })();
+  return BOX.ready;
+}
+const PANFLAG = /夸克|阿里|UC|百度|115|天翼|迅雷|磁力|网盘|云盘|quark|ali|pan|baidu|xunlei|magnet/i;
+const PANID = /^(magnet:|ed2k:|thunder:)|pan\.|quark\.cn|aliyundrive|alipan|115\.com|123pan|cloud\.189|pan\.baidu|drive\.uc/i;
+/* 在一个爬虫源里搜片名 → 取详情 → 每条线路（最多 3 条）当一个片源 */
+async function boxOne(site, name, year, want, onFound, onCam, alive) {
+  const t0 = Date.now();
+  const r = await nnCall("boxSearch", [site.key, name, 9000]);
+  if (!alive()) return;
+  let d = null; try { d = JSON.parse(r.body); } catch (e) { return; }
+  const nm = v => canon(String(v.vod_name || "").replace(/[\[【(（][^\]】)）]*[\]】)）]/g, ""));
+  const yok = v => { const vy = String(v.vod_year || ""); return !year || !/^\d{4}$/.test(vy) || Math.abs(+vy - +year) <= 1; };
+  const hit = ((d && d.list) || []).find(v => (canon(v.vod_name) === want || nm(v) === want) && yok(v));
+  if (!hit) return;
+  let v = hit;
+  if (!v.vod_play_url) {
+    const x = await nnCall("boxDetail", [site.key, String(hit.vod_id), 9000]);
+    if (!alive()) return;
+    try { v = (JSON.parse(x.body).list || [])[0]; } catch (e) { return; }
+  }
+  if (!v || !v.vod_play_url || !yok(v)) return;
+  const froms = String(v.vod_play_from || "").split("$$$"), urls = String(v.vod_play_url || "").split("$$$");
+  let n = 0;
+  urls.forEach((u, i) => {
+    if (n >= 3) return;
+    const flag = froms[i] || `线路${i + 1}`;
+    if (PANFLAG.test(flag)) return;
+    const eps = [];
+    u.split("#").forEach((item, idx) => {
+      if (!item.trim()) return;
+      const k = item.indexOf("$"), en = (k >= 0 ? item.slice(0, k) : "").trim() || `第${idx + 1}集`, id = (k >= 0 ? item.slice(k + 1) : item).trim();
+      if (!id || PANID.test(id)) return;
+      eps.push({ name: en, url: NN.boxUrl(site.key, flag, id) });
+    });
+    if (!eps.length) return;
+    if (isCam(v, eps)) { if (onCam) onCam(site.name); return; }
+    n++;
+    onFound({ site: urls.length > 1 ? `${site.name}·${flag}` : site.name, api: `box:${site.key}:${flag}`, eps, remarks: v.vod_remarks || "", ms: Date.now() - t0, rank: 300, bps: null, box: 1 });
+  });
+}
+
 /* 片名规范化，跨站匹配 */
 const CN = { "一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10 };
 function canon(t) {
@@ -182,14 +257,28 @@ const isCam = (v, eps) => eps.length <= 3 && ([v.vod_remarks, v.vod_version, v.v
 function resolve(name, year, onFound, onCam) {
   const want = canon(name);
   let alive = true, idx = 0, running = 0;
-  const sites = SRC.list.slice();
+  const have = {}; SRC.list.forEach(s => { have[s.api] = 1; });
+  const sites = SRC.list.concat(BOX.cms.filter(s => !have[s.api]));
+  // 爬虫源：等接口加载好再搜，同时最多 6 个（手机 4 个），每个最多等 9 秒
+  const boxDone = APP && NN.boxSearch ? (BOX.ready || Promise.resolve(BOX)).then(() => new Promise(done => {
+    const list = BOX.sites.slice(); let bi = 0, br = 0;
+    const next = () => {
+      if (!alive || (bi >= list.length && br === 0)) return done();
+      while (br < (MOB ? 4 : 6) && bi < list.length) {
+        const s = list[bi++]; br++;
+        boxOne(s, name, year, want, onFound, onCam, () => alive).catch(() => {}).then(() => { br--; next(); });
+      }
+    };
+    next();
+  })) : Promise.resolve();
   return {
     cancel() { alive = false; },
     done: new Promise(done => {
-      if (!sites.length) return done();
+      const fin = () => boxDone.then(done, done);
+      if (!sites.length) return fin();
       const next = () => {
         if (!alive) return done();
-        if (idx >= sites.length && running === 0) return done();
+        if (idx >= sites.length && running === 0) return fin();
         while (running < 20 && idx < sites.length) {
           const s = sites[idx], rank = idx++;
           running++;
@@ -856,6 +945,7 @@ const PAGES = {
       <div class="setrow f" id="sRefresh"><span>刷新片源</span><small>${SRC.list.length} 个采集站 · ${esc(SRC.from.replace(/^https?:\/\//, "").slice(0, 60))}</small></div>
       <div class="setrow f" id="sUrl"><span>片源地址</span><small>${esc(custom || "默认：zknjjjx/tvbox 的 cmstv.json（自动加速）")}</small></div>
       <div class="setrow f" id="sReset"><span>恢复默认片源</span><small>清掉自定义地址</small></div>
+      <div class="setrow f" id="sBox"><span>爬虫接口</span><small id="sBoxS">${esc(boxLabel())}</small></div>
       <div class="setrow f" id="sUpd"><span>检查更新</span><small id="sUpdS">当前 ${APP ? esc(NN.version()) : "dev"}${UPD.latest ? (hasNew() ? ` · 有新版 ${esc(UPD.latest.version)}，按 OK 升级` : " · 已是最新") : ""}</small></div>
       <div class="setrow f" id="sApk"><span>安装包残留</span><small id="sApkS">${(() => { let a = { n: 0 }; try { a = APP && NN.apkInfo ? JSON.parse(NN.apkInfo()) : a; } catch (e) {} return a.n ? `${a.n} 个 · ${a.mb} MB，按 OK 删除` : "没有残留，已全部删除"; })()}</small></div>
       <div class="setrow f" id="sClear"><span>清除观看记录</span><small>${histAll().length} 条</small></div>
@@ -868,6 +958,21 @@ const PAGES = {
       $("#uBox")._ok = () => $("#uIn").focus();
       $("#uNo")._ok = closeLayer;
       $("#uOk")._ok = async () => { const v = $("#uIn").value.trim(); cfg.set("srcUrl", v === DEF_SRC ? "" : v); closeLayer(); toast("正在加载新片源…"); await loadSources(true); toast(`片源：${SRC.list.length} 个`); render("settings"); };
+    };
+    $("#sBox")._ok = () => {
+      const sel = cfg.get("boxSel", BOX_DEF), opts = BOX_PRESETS.map(p => [p.name, p.name]).concat([["custom", "自定义地址"], ["off", "不用爬虫源"]]);
+      openLayer(`<div class="panel"><h2>爬虫接口</h2><p style="opacity:.7">TVBox 接口里的爬虫源和采集站一起搜索、测速、自动挑最快的。网盘、扫码、直播类已去掉。</p>
+        <div class="acts boxopts" style="flex-wrap:wrap;margin-top:1.2rem">${opts.map(o => `<div class="btn f${o[0] === sel ? " pri" : ""}" data-o="${esc(o[0])}">${esc(o[1])}</div>`).join("")}</div></div>`, `.boxopts .btn[data-o="${sel}"]`);
+      const apply = async v => { cfg.set("boxSel", v); closeLayer(); toast(v === "off" ? "已停用爬虫源" : "正在加载接口…"); await boxLoad(true); toast(v === "off" ? "已停用爬虫源" : `爬虫接口：${BOX.state}`); render("settings"); };
+      $$(".boxopts .btn").forEach(b => { b._ok = () => {
+        if (b.dataset.o !== "custom") { apply(b.dataset.o); return; }
+        openLayer(`<div class="panel"><h2>自定义爬虫接口</h2><p style="opacity:.7">填 TVBox 配置地址，支持加密和图片伪装的接口。</p>
+          <div class="sbox f" style="margin:1.2rem 0 0;max-width:none" id="bBox"><input id="bIn" value="${esc(cfg.get("boxUrl", ""))}"></div>
+          <div class="acts" style="margin-top:1.6rem"><div class="btn pri f" id="bOk">保存</div><div class="btn f" id="bNo">取消</div></div></div>`, "#bBox");
+        $("#bBox")._ok = () => $("#bIn").focus();
+        $("#bNo")._ok = closeLayer;
+        $("#bOk")._ok = () => { const u = $("#bIn").value.trim(); if (!u) { toast("地址不能为空"); return; } cfg.set("boxUrl", u); apply("custom"); };
+      }; });
     };
     $("#sReset")._ok = async () => { cfg.set("srcUrl", ""); await loadSources(true); toast("已恢复默认片源"); render("settings"); };
     $("#sUpd")._ok = () => {
@@ -883,6 +988,12 @@ const PAGES = {
   },
 };
 let resolving = null;
+function boxLabel() {
+  const sel = cfg.get("boxSel", BOX_DEF);
+  if (sel === "off") return "不用爬虫源";
+  const nm = sel === "custom" ? "自定义" : sel;
+  return `${nm} · ${BOX.state || "未加载"}${BOX.sites.length ? "（" + ["jar", "js", "py"].map(k => [k, BOX.sites.filter(s => s.kind === k).length]).filter(x => x[1]).map(x => `${x[0] === "jar" ? "Java" : x[0] === "js" ? "JS" : "Python"} ${x[1]}`).join("、") + "）" : ""}`;
+}
 
 /* ---------------- 在线升级：读 GitHub Release v2-latest 里的 latest.json ---------------- */
 const REL = "https://github.com/zknjjjx/NiuniuTV/releases/download/v2-latest/";
@@ -1045,6 +1156,7 @@ function boot() {
     });
   }
   loadSources();
+  boxLoad();
   route = { name: "home" };
   autoUpdate();
   bootFocus = true;

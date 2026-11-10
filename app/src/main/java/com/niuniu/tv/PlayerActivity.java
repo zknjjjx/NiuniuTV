@@ -263,6 +263,26 @@ public class PlayerActivity extends Activity {
         if (ei >= a.length()) ei = a.length() - 1;
         String url = a.optJSONObject(ei).optString("url");
         started = false;
+        if (Box.isBox(url)) {   // 爬虫源：先在后台向爬虫要真实地址，拿到再接着播
+            final String bu = url; final int s0 = si, e0 = ei; final long p0 = pos; final int tk = ++boxTok;
+            curUrl = bu;
+            h.removeCallbacks(watchdog);
+            new Thread(new Runnable() { public void run() {
+                final Box.Res r = Box.resolve(bu, 15000);
+                h.post(new Runnable() { public void run() {
+                    if (isFinishing() || tk != boxTok || si != s0 || ei != e0) return;
+                    if (r == null) { switchSource("取不到播放地址"); return; }
+                    loadUrl(r.url, p0);
+                } });
+            } }, "box-resolve").start();
+            return;
+        }
+        loadUrl(url, pos);
+    }
+
+    private int boxTok = 0;
+
+    private void loadUrl(String url, long pos) {
         curUrl = url;
         bufSince = android.os.SystemClock.uptimeMillis();
         Pre.start(this, url, pos, Pre.AHEAD_MS);   // 换源/换集＝新地址：旧缓存删掉，开始缓存新的

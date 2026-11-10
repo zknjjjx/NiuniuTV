@@ -280,6 +280,114 @@ function loadSources(force) {
     return SRC;
   });
 }
+const BOX_PRESETS = [
+  { name: "\u996D\u592A\u786C", urls: ["http://www.\u996D\u592A\u786C.com/tv", "http://www.\u996D\u592A\u786C.net/tv", "http://fty.888484.xyz/tv", "http://fty.xxooo.cf/tv"] },
+  { name: "\u738B\u4E8C\u5C0F", urls: ["http://tvbox.\u738B\u4E8C\u5C0F\u653E\u725B\u5A03.top/", "https://9280.kstore.vip/newwex.json", "http://tv.999888987.xyz/"] },
+  { name: "\u80A5\u732B", urls: ["http://\u80A5\u732B.net/", "http://hello.\u80A5\u732B.com/", "https://6296.kstore.vip/fm.gif"] },
+  { name: "\u6478\u9C7C\u513F", urls: ["http://\u6211\u4E0D\u662F.\u6478\u9C7C\u513F.com", "http://\u6211\u4E0D\u662F.\u6478\u9C7C\u513F.top", "http://fish.y456y.com"] },
+  { name: "\u5357\u98CE", urls: ["https://raw.githubusercontent.com/yoursmile66/TVBox/main/XC.json"] },
+  { name: "\u83DC\u59AE\u4E1D", urls: ["https://tv.\u83DC\u59AE\u4E1D.top"] },
+  { name: "\u5C0F\u76D2\u5B50", urls: ["http://xhztv.top/xhz", "http://xhztv.top/4k.json"] },
+  { name: "\u9AD8\u5929\u6D41\u4E91", urls: ["https://raw.githubusercontent.com/gaotianliuyun/gao/master/js.json"] }
+];
+const BOX_DEF = "\u996D\u592A\u786C";
+const BOX = { sites: [], cms: [], state: "", ready: null };
+function nnCall(fn, args) {
+  return new Promise((r) => {
+    const id = "x" + ++seq;
+    cbs[id] = r;
+    NN[fn].apply(NN, [id].concat(args));
+  });
+}
+function boxLoad(force) {
+  if (!APP || !NN.boxLoad) return Promise.resolve(BOX);
+  const sel = cfg.get("boxSel", BOX_DEF);
+  let urls = [];
+  if (sel === "off") urls = [""];
+  else if (sel === "custom") urls = [cfg.get("boxUrl", "")];
+  else {
+    const p = BOX_PRESETS.find((x) => x.name === sel) || BOX_PRESETS[0];
+    p.urls.forEach((u) => {
+      urls = urls.concat(/githubusercontent|jsdelivr/.test(u) ? mirrors(u) : [u]);
+    });
+  }
+  BOX.state = "\u52A0\u8F7D\u4E2D\u2026";
+  BOX.ready = (() => __async(this, null, function* () {
+    for (let i = 0; i < urls.length; i++) {
+      const x = yield nnCall("boxLoad", [urls[i], !!force]);
+      let r = {};
+      try {
+        r = JSON.parse(x.body);
+      } catch (e) {
+      }
+      BOX.state = r.state || "\u52A0\u8F7D\u5931\u8D25";
+      if (r.ok || !urls[i]) break;
+    }
+    try {
+      BOX.sites = JSON.parse(NN.boxSites());
+      BOX.cms = parseSites(JSON.parse(NN.boxCms()));
+    } catch (e) {
+      BOX.sites = [];
+      BOX.cms = [];
+    }
+    return BOX;
+  }))();
+  return BOX.ready;
+}
+const PANFLAG = /夸克|阿里|UC|百度|115|天翼|迅雷|磁力|网盘|云盘|quark|ali|pan|baidu|xunlei|magnet/i;
+const PANID = /^(magnet:|ed2k:|thunder:)|pan\.|quark\.cn|aliyundrive|alipan|115\.com|123pan|cloud\.189|pan\.baidu|drive\.uc/i;
+function boxOne(site, name, year, want, onFound, onCam, alive) {
+  return __async(this, null, function* () {
+    const t0 = Date.now();
+    const r = yield nnCall("boxSearch", [site.key, name, 9e3]);
+    if (!alive()) return;
+    let d = null;
+    try {
+      d = JSON.parse(r.body);
+    } catch (e) {
+      return;
+    }
+    const nm = (v2) => canon(String(v2.vod_name || "").replace(/[\[【(（][^\]】)）]*[\]】)）]/g, ""));
+    const yok = (v2) => {
+      const vy = String(v2.vod_year || "");
+      return !year || !/^\d{4}$/.test(vy) || Math.abs(+vy - +year) <= 1;
+    };
+    const hit = (d && d.list || []).find((v2) => (canon(v2.vod_name) === want || nm(v2) === want) && yok(v2));
+    if (!hit) return;
+    let v = hit;
+    if (!v.vod_play_url) {
+      const x = yield nnCall("boxDetail", [site.key, String(hit.vod_id), 9e3]);
+      if (!alive()) return;
+      try {
+        v = (JSON.parse(x.body).list || [])[0];
+      } catch (e) {
+        return;
+      }
+    }
+    if (!v || !v.vod_play_url || !yok(v)) return;
+    const froms = String(v.vod_play_from || "").split("$$$"), urls = String(v.vod_play_url || "").split("$$$");
+    let n = 0;
+    urls.forEach((u, i) => {
+      if (n >= 3) return;
+      const flag = froms[i] || `\u7EBF\u8DEF${i + 1}`;
+      if (PANFLAG.test(flag)) return;
+      const eps = [];
+      u.split("#").forEach((item, idx) => {
+        if (!item.trim()) return;
+        const k = item.indexOf("$"), en = (k >= 0 ? item.slice(0, k) : "").trim() || `\u7B2C${idx + 1}\u96C6`, id = (k >= 0 ? item.slice(k + 1) : item).trim();
+        if (!id || PANID.test(id)) return;
+        eps.push({ name: en, url: NN.boxUrl(site.key, flag, id) });
+      });
+      if (!eps.length) return;
+      if (isCam(v, eps)) {
+        if (onCam) onCam(site.name);
+        return;
+      }
+      n++;
+      onFound({ site: urls.length > 1 ? `${site.name}\xB7${flag}` : site.name, api: `box:${site.key}:${flag}`, eps, remarks: v.vod_remarks || "", ms: Date.now() - t0, rank: 300, bps: null, box: 1 });
+    });
+  });
+}
 const CN = { "\u4E00": 1, "\u4E8C": 2, "\u4E09": 3, "\u56DB": 4, "\u4E94": 5, "\u516D": 6, "\u4E03": 7, "\u516B": 8, "\u4E5D": 9, "\u5341": 10 };
 function canon(t) {
   t = String(t || "").replace(/[\s·:：,，.。!！?？'"“”‘’()（）\[\]【】\-_—]/g, "").toLowerCase();
@@ -313,16 +421,38 @@ const isCam = (v, eps) => eps.length <= 3 && ([v.vod_remarks, v.vod_version, v.v
 function resolve(name, year, onFound, onCam) {
   const want = canon(name);
   let alive = true, idx = 0, running = 0;
-  const sites = SRC.list.slice();
+  const have = {};
+  SRC.list.forEach((s) => {
+    have[s.api] = 1;
+  });
+  const sites = SRC.list.concat(BOX.cms.filter((s) => !have[s.api]));
+  const boxDone = APP && NN.boxSearch ? (BOX.ready || Promise.resolve(BOX)).then(() => new Promise((done) => {
+    const list = BOX.sites.slice();
+    let bi = 0, br = 0;
+    const next = () => {
+      if (!alive || bi >= list.length && br === 0) return done();
+      while (br < (MOB ? 4 : 6) && bi < list.length) {
+        const s = list[bi++];
+        br++;
+        boxOne(s, name, year, want, onFound, onCam, () => alive).catch(() => {
+        }).then(() => {
+          br--;
+          next();
+        });
+      }
+    };
+    next();
+  })) : Promise.resolve();
   return {
     cancel() {
       alive = false;
     },
     done: new Promise((done) => {
-      if (!sites.length) return done();
+      const fin = () => boxDone.then(done, done);
+      if (!sites.length) return fin();
       const next = () => {
         if (!alive) return done();
-        if (idx >= sites.length && running === 0) return done();
+        if (idx >= sites.length && running === 0) return fin();
         while (running < 20 && idx < sites.length) {
           const s = sites[idx], rank = idx++;
           running++;
@@ -1341,6 +1471,7 @@ const PAGES = {
       <div class="setrow f" id="sRefresh"><span>\u5237\u65B0\u7247\u6E90</span><small>${SRC.list.length} \u4E2A\u91C7\u96C6\u7AD9 \xB7 ${esc(SRC.from.replace(/^https?:\/\//, "").slice(0, 60))}</small></div>
       <div class="setrow f" id="sUrl"><span>\u7247\u6E90\u5730\u5740</span><small>${esc(custom || "\u9ED8\u8BA4\uFF1Azknjjjx/tvbox \u7684 cmstv.json\uFF08\u81EA\u52A8\u52A0\u901F\uFF09")}</small></div>
       <div class="setrow f" id="sReset"><span>\u6062\u590D\u9ED8\u8BA4\u7247\u6E90</span><small>\u6E05\u6389\u81EA\u5B9A\u4E49\u5730\u5740</small></div>
+      <div class="setrow f" id="sBox"><span>\u722C\u866B\u63A5\u53E3</span><small id="sBoxS">${esc(boxLabel())}</small></div>
       <div class="setrow f" id="sUpd"><span>\u68C0\u67E5\u66F4\u65B0</span><small id="sUpdS">\u5F53\u524D ${APP ? esc(NN.version()) : "dev"}${UPD.latest ? hasNew() ? ` \xB7 \u6709\u65B0\u7248 ${esc(UPD.latest.version)}\uFF0C\u6309 OK \u5347\u7EA7` : " \xB7 \u5DF2\u662F\u6700\u65B0" : ""}</small></div>
       <div class="setrow f" id="sApk"><span>\u5B89\u88C5\u5305\u6B8B\u7559</span><small id="sApkS">${(() => {
         let a = { n: 0 };
@@ -1372,6 +1503,41 @@ const PAGES = {
           yield loadSources(true);
           toast(`\u7247\u6E90\uFF1A${SRC.list.length} \u4E2A`);
           render("settings");
+        });
+      };
+      $("#sBox")._ok = () => {
+        const sel = cfg.get("boxSel", BOX_DEF), opts = BOX_PRESETS.map((p) => [p.name, p.name]).concat([["custom", "\u81EA\u5B9A\u4E49\u5730\u5740"], ["off", "\u4E0D\u7528\u722C\u866B\u6E90"]]);
+        openLayer(`<div class="panel"><h2>\u722C\u866B\u63A5\u53E3</h2><p style="opacity:.7">TVBox \u63A5\u53E3\u91CC\u7684\u722C\u866B\u6E90\u548C\u91C7\u96C6\u7AD9\u4E00\u8D77\u641C\u7D22\u3001\u6D4B\u901F\u3001\u81EA\u52A8\u6311\u6700\u5FEB\u7684\u3002\u7F51\u76D8\u3001\u626B\u7801\u3001\u76F4\u64AD\u7C7B\u5DF2\u53BB\u6389\u3002</p>
+        <div class="acts boxopts" style="flex-wrap:wrap;margin-top:1.2rem">${opts.map((o) => `<div class="btn f${o[0] === sel ? " pri" : ""}" data-o="${esc(o[0])}">${esc(o[1])}</div>`).join("")}</div></div>`, `.boxopts .btn[data-o="${sel}"]`);
+        const apply = (v) => __async(this, null, function* () {
+          cfg.set("boxSel", v);
+          closeLayer();
+          toast(v === "off" ? "\u5DF2\u505C\u7528\u722C\u866B\u6E90" : "\u6B63\u5728\u52A0\u8F7D\u63A5\u53E3\u2026");
+          yield boxLoad(true);
+          toast(v === "off" ? "\u5DF2\u505C\u7528\u722C\u866B\u6E90" : `\u722C\u866B\u63A5\u53E3\uFF1A${BOX.state}`);
+          render("settings");
+        });
+        $$(".boxopts .btn").forEach((b) => {
+          b._ok = () => {
+            if (b.dataset.o !== "custom") {
+              apply(b.dataset.o);
+              return;
+            }
+            openLayer(`<div class="panel"><h2>\u81EA\u5B9A\u4E49\u722C\u866B\u63A5\u53E3</h2><p style="opacity:.7">\u586B TVBox \u914D\u7F6E\u5730\u5740\uFF0C\u652F\u6301\u52A0\u5BC6\u548C\u56FE\u7247\u4F2A\u88C5\u7684\u63A5\u53E3\u3002</p>
+          <div class="sbox f" style="margin:1.2rem 0 0;max-width:none" id="bBox"><input id="bIn" value="${esc(cfg.get("boxUrl", ""))}"></div>
+          <div class="acts" style="margin-top:1.6rem"><div class="btn pri f" id="bOk">\u4FDD\u5B58</div><div class="btn f" id="bNo">\u53D6\u6D88</div></div></div>`, "#bBox");
+            $("#bBox")._ok = () => $("#bIn").focus();
+            $("#bNo")._ok = closeLayer;
+            $("#bOk")._ok = () => {
+              const u = $("#bIn").value.trim();
+              if (!u) {
+                toast("\u5730\u5740\u4E0D\u80FD\u4E3A\u7A7A");
+                return;
+              }
+              cfg.set("boxUrl", u);
+              apply("custom");
+            };
+          };
         });
       };
       $("#sReset")._ok = () => __async(this, null, function* () {
@@ -1413,6 +1579,12 @@ const PAGES = {
   }
 };
 let resolving = null;
+function boxLabel() {
+  const sel = cfg.get("boxSel", BOX_DEF);
+  if (sel === "off") return "\u4E0D\u7528\u722C\u866B\u6E90";
+  const nm = sel === "custom" ? "\u81EA\u5B9A\u4E49" : sel;
+  return `${nm} \xB7 ${BOX.state || "\u672A\u52A0\u8F7D"}${BOX.sites.length ? "\uFF08" + ["jar", "js", "py"].map((k) => [k, BOX.sites.filter((s) => s.kind === k).length]).filter((x) => x[1]).map((x) => `${x[0] === "jar" ? "Java" : x[0] === "js" ? "JS" : "Python"} ${x[1]}`).join("\u3001") + "\uFF09" : ""}`;
+}
 const REL = "https://github.com/zknjjjx/NiuniuTV/releases/download/v2-latest/";
 const UPD_JSON = MOB ? "latest-m.json" : "latest.json";
 const relMirrors = (f) => [`https://gh-proxy.com/${REL}${f}`, `https://9797.cc.cd/${REL}${f}`, `https://ghfast.top/${REL}${f}`, REL + f];
@@ -1661,6 +1833,7 @@ function boot() {
     });
   }
   loadSources();
+  boxLoad();
   route = { name: "home" };
   autoUpdate();
   bootFocus = true;
