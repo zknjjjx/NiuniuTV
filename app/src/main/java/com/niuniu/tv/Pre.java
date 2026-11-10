@@ -108,7 +108,7 @@ public class Pre {
         Router(DataSource d, DataSource c) { direct = d; cached = c; }
         @Override public void addTransferListener(@NonNull TransferListener t) { direct.addTransferListener(t); cached.addTransferListener(t); }
         @Override public long open(@NonNull DataSpec s) throws IOException { cur = isList(s.uri) ? direct : cached; return cur.open(s); }
-        @Override public int read(@NonNull byte[] b, int o, int l) throws IOException { return cur.read(b, o, l); }
+        @Override public int read(@NonNull byte[] b, int o, int l) throws IOException { int n = cur.read(b, o, l); if (n > 0) playerData = SystemClock.uptimeMillis(); return n; }
         @Nullable @Override public Uri getUri() { return cur == null ? null : cur.getUri(); }
         @NonNull @Override public Map<String, List<String>> getResponseHeaders() { return cur == null ? java.util.Collections.<String, List<String>>emptyMap() : cur.getResponseHeaders(); }
         @Override public void close() throws IOException { if (cur != null) cur.close(); }
@@ -200,6 +200,14 @@ public class Pre {
             long t = new org.json.JSONObject(Lan.cfg(c).getString("crowd", "{}")).optLong(host.toLowerCase(java.util.Locale.US), 0);
             return t > 0 && System.currentTimeMillis() - t < 7 * 86400_000L;
         } catch (Throwable e) { return false; }
+    }
+
+    /** 播放器最近一次读到数据的时间（uptime） */
+    static volatile long playerData;
+
+    /** 后台预下载最近一次进账的时间（uptime），不是这一集返回 0 */
+    static synchronized long lastData(String url) {
+        return job != null && job.url.equals(url) && !job.dead ? job.lastData : 0;
     }
 
     /** 最近 ms 毫秒内后台下载还有进账 */

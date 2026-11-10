@@ -49,8 +49,11 @@ import java.util.List;
 
 @OptIn(markerClass = UnstableApi.class)
 public class PlayerActivity extends Activity {
-    static final long START_TIMEOUT = 12000;   // 起播 12 秒还没画面 → 换源
-    static final long STALL_TIMEOUT = 20000;   // 播放中卡住 20 秒 → 换源
+    // 换源判断看「有没有进账」（播放器自己读到的 + 后台预下载收到的）：
+    // 起播：6 秒一个字节都没收到就换，有数据在进最多等 12 秒
+    // 卡顿：5 秒没进账就换（刚快进过放宽到 10 秒），有进账最多等 30 秒
+    static final long START_DEAD = 6000, START_MAX = 12000;
+    static final long STALL_DEAD = 5000, STALL_SEEK = 10000, STALL_MAX = 30000;
 
     private JSONObject data;
     private JSONArray sources;
@@ -63,15 +66,23 @@ public class PlayerActivity extends Activity {
     private final List<Integer> failed = new ArrayList<>();
     private long resumePos = 0;
 
+    private long seekAt = 0;
     private final Runnable watchdog = new Runnable() {
         public void run() {
             if (player == null) return;
-            if (player.getPlaybackState() == Player.STATE_BUFFERING || !started) {
-                // 后台缓存还在进账：不急着换源，最多再等到卡住 90 秒
-                long stuck = android.os.SystemClock.uptimeMillis() - bufSince;
-                if (started && Pre.progressing(curUrl, 8000) && stuck < 90000) { h.postDelayed(this, 5000); return; }
-                switchSource(started ? "卡顿太久" : "起播太慢");
+            if (started && player.getPlaybackState() != Player.STATE_BUFFERING) return;
+            long now = android.os.SystemClock.uptimeMillis();
+            long since = now - bufSince;
+            long quiet = now - Math.max(bufSince, Math.max(Pre.playerData, Pre.lastData(curUrl)));
+            if (!started) {
+                if (quiet >= START_DEAD) { switchSource("片源没响应"); return; }
+                if (since >= START_MAX) { switchSource("起播太慢"); return; }
+            } else {
+                long dead = now - seekAt < STALL_SEEK ? STALL_SEEK : STALL_DEAD;
+                if (quiet >= dead) { switchSource("卡住了且没有数据"); return; }
+                if (since >= STALL_MAX) { switchSource("卡顿太久"); return; }
             }
+            h.postDelayed(this, 1000);
         }
     };
     private final Runnable hideStatus = new Runnable() { public void run() { fade(status, false); } };
@@ -174,6 +185,10 @@ public class PlayerActivity extends Activity {
             @Override
             public void onPlayWhenReadyChanged(boolean pwr, int reason) { refreshCenter(); }
             @Override
+            public void onPositionDiscontinuity(@NonNull Player.PositionInfo o, @NonNull Player.PositionInfo n, int reason) {
+                if (reason == Player.DISCONTINUITY_REASON_SEEK) seekAt = android.os.SystemClock.uptimeMillis();
+            }
+            @Override
             public void onPlaybackStateChanged(int st) {
                 if (st == Player.STATE_READY) {
                     h.removeCallbacks(watchdog);
@@ -187,7 +202,7 @@ public class PlayerActivity extends Activity {
                     bufSince = android.os.SystemClock.uptimeMillis();
                     reportPos();   // 一缓冲就让后台预下载让路
                     h.removeCallbacks(watchdog);
-                    h.postDelayed(watchdog, started ? STALL_TIMEOUT : START_TIMEOUT);
+                    h.postDelayed(watchdog, 1000);
                 } else if (st == Player.STATE_ENDED) {
                     h.removeCallbacks(watchdog);
                     nextEpisode();
@@ -257,7 +272,7 @@ public class PlayerActivity extends Activity {
         player.prepare();
         player.setPlayWhenReady(true);
         h.removeCallbacks(watchdog);
-        h.postDelayed(watchdog, START_TIMEOUT);
+        h.postDelayed(watchdog, 1000);
         updateInfo();
     }
 
@@ -885,7 +900,7 @@ public class PlayerActivity extends Activity {
         if (b == 0) return 1;
         int r = hh >= 1000 ? 3 : (hh >= 700 || hh == 0) ? 2 : 1;
         // 5 路预下载：1080 单路 0.2 MB/s 就够；嫌连接多的域名只能单路，要 0.9 才排在 720 前
-        double need = r == 3 ? (crowdHost(s) ? 0.9 : 0.2) * 1048576 : r == 2 ? 0.45 * 1048576 : 0;
+        double need = r == 3 ? (crowdHost(s) ? 0.9 : 0.2) * 1048576 : r == 2 ? 0.15 * 1048576 : 0;
         return (b >= need ? r : 1) + 1;
     }
     private int bestSource() {
@@ -963,14 +978,19 @@ public class PlayerActivity extends Activity {
         long pos = player == null ? 0 : Math.max(player.getCurrentPosition(), started ? 0 : resumePos);
         failed.add(si);
         String name = epName();
-        int n = sources.length();
-        for (int k = 1; k < n; k++) {
-            int c = (si + k) % n;
-            if (failed.contains(c)) continue;
-            JSONArray a = eps(c);
+        // 每次换源都按最新档位重排（含刚记下嫌连接多的站），挑没失败过的最好那个
+        int c = -1, idx = -1; long bs = Long.MIN_VALUE;
+        for (int i = 0; i < sources.length(); i++) {
+            if (i == si || failed.contains(i)) continue;
+            JSONArray a = eps(i);
             if (a == null || a.length() == 0) continue;
-            int idx = matchEp(a, name, ei);
-            if (idx < 0) continue;
+            int k = matchEp(a, name, ei);
+            if (k < 0) continue;
+            JSONObject s = sources.optJSONObject(i);
+            long sc = tierOf(s) * 10000000000L + s.optLong("bps", 0);
+            if (sc > bs) { bs = sc; c = i; idx = k; }
+        }
+        if (c >= 0) {
             si = c;
             ei = idx;
             showStatus(why + "，自动换到「" + sources.optJSONObject(si).optString("site") + "」", 3500);
