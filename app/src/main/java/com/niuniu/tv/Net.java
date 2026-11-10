@@ -106,7 +106,8 @@ public class Net {
         long t0 = System.currentTimeMillis();
         try {
             String u = url;
-            String seg = null;
+            String seg = null, keyUri = null, ivHex = null;
+            long seq = 0, segSeq = 0;
             for (int depth = 0; depth < 3 && seg == null; depth++) {
                 Res r = get(u, null, Math.max(2000, budgetMs), 2 * 1024 * 1024);
                 if (r.code >= 400) throw new Exception("http " + r.code);
@@ -119,15 +120,31 @@ public class Net {
                 String base = r.finalUrl;
                 String next = null;
                 boolean variant = body.contains("#EXT-X-STREAM-INF");
+                if (!variant) {  // 去掉片头插的广告段，测的就是正片的第一个分片
+                    int keep = AdFilter.lastRemoved;
+                    try { body = AdFilter.filter(body, base); } catch (Throwable ignore) {}
+                    AdFilter.lastRemoved = keep;
+                }
                 int h = 0;
                 for (String line : body.split("\n")) {
                     line = line.trim();
+                    if (line.startsWith("#EXT-X-MEDIA-SEQUENCE:")) { try { seq = Long.parseLong(line.substring(22).trim()); } catch (Exception ignore) {} }
+                    if (line.startsWith("#EXT-X-KEY")) {
+                        keyUri = null; ivHex = null;
+                        if (line.contains("METHOD=AES-128")) {
+                            java.util.regex.Matcher km = java.util.regex.Pattern.compile("URI=\"([^\"]+)\"").matcher(line);
+                            if (km.find()) keyUri = new URL(new URL(base), km.group(1)).toString();
+                            java.util.regex.Matcher im = java.util.regex.Pattern.compile("IV=(0[xX][0-9a-fA-F]+)").matcher(line);
+                            if (im.find()) ivHex = im.group(1);
+                        } else if (!line.contains("METHOD=NONE")) keyUri = "?";
+                    }
                     if (line.startsWith("#EXT-X-STREAM-INF")) {
                         java.util.regex.Matcher m = java.util.regex.Pattern.compile("RESOLUTION=\\d+x(\\d+)").matcher(line);
                         if (m.find()) h = Math.max(h, Integer.parseInt(m.group(1)));
                     }
                     if (line.length() == 0 || line.startsWith("#")) continue;
                     next = new URL(new URL(base), line).toString();
+                    segSeq = seq;
                     break;
                 }
                 if (h > 0) o.put("h", h);
@@ -144,8 +161,10 @@ public class Net {
             byte[] buf = new byte[32768];
             long got = 0, ts = System.currentTimeMillis();
             int n;
+            ByteArrayOutputStream head = o.has("h") ? null : new ByteArrayOutputStream();
             while ((n = in.read(buf)) > 0) {
                 got += n;
+                if (head != null && head.size() < 262144) head.write(buf, 0, n);
                 if (got >= maxBytes || System.currentTimeMillis() - ts > left) break;
             }
             in.close();
@@ -153,6 +172,18 @@ public class Net {
             long dt = Math.max(1, System.currentTimeMillis() - ts);
             if (got < 4096) throw new Exception("tiny");
             o.put("bps", got * 1000 / dt);
+            // 主列表没标分辨率：从分片开头的视频头（SPS）读，和播放器一样按 max(高, 宽×9/16) 记
+            if (head != null && !"?".equals(keyUri)) {
+                try {
+                    byte[] d = head.toByteArray();
+                    if (keyUri != null) {
+                        Res kr = get(keyUri, null, 3000, 64);
+                        d = kr.code < 400 && kr.body.length == 16 ? Vprobe.aes(kr.body, Vprobe.ivOf(ivHex, segSeq), d) : null;
+                    }
+                    int[] wh = Vprobe.tsRes(d);
+                    if (wh != null) o.put("h", Math.max(wh[1], wh[0] * 9 / 16));
+                } catch (Throwable ignore) {}
+            }
         } catch (Exception e) {
             try { o.put("bps", -1); o.put("err", e.getClass().getSimpleName()); } catch (Exception ignored) {}
         }
