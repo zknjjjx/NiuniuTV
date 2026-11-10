@@ -152,15 +152,9 @@ async function loadSources(force) {
 }
 
 /* ---------------- TVBox 接口（爬虫源）：原生层加载 jar / JS / Python 爬虫，这里负责搜索与组装片源 ---------------- */
+/* 和 TVBox 一样由用户填一个接口；App 只预设一条热门接口，随时可换 */
 const BOX_PRESETS = [
   { name: "饭太硬", urls: ["http://www.饭太硬.com/tv", "http://www.饭太硬.net/tv", "http://fty.888484.xyz/tv", "http://fty.xxooo.cf/tv"] },
-  { name: "王二小", urls: ["http://tvbox.王二小放牛娃.top/", "https://9280.kstore.vip/newwex.json", "http://tv.999888987.xyz/"] },
-  { name: "肥猫", urls: ["http://肥猫.net/", "http://hello.肥猫.com/", "https://6296.kstore.vip/fm.gif"] },
-  { name: "摸鱼儿", urls: ["http://我不是.摸鱼儿.com", "http://我不是.摸鱼儿.top", "http://fish.y456y.com"] },
-  { name: "南风", urls: ["https://raw.githubusercontent.com/yoursmile66/TVBox/main/XC.json"] },
-  { name: "菜妮丝", urls: ["https://tv.菜妮丝.top"] },
-  { name: "小盒子", urls: ["http://xhztv.top/xhz", "http://xhztv.top/4k.json"] },
-  { name: "高天流云", urls: ["https://raw.githubusercontent.com/gaotianliuyun/gao/master/js.json"] },
 ];
 const BOX_DEF = "饭太硬";
 const BOX = { sites: [], cms: [], state: "", ready: null };
@@ -945,7 +939,7 @@ const PAGES = {
       <div class="setrow f" id="sRefresh"><span>刷新片源</span><small>${SRC.list.length} 个采集站 · ${esc(SRC.from.replace(/^https?:\/\//, "").slice(0, 60))}</small></div>
       <div class="setrow f" id="sUrl"><span>片源地址</span><small>${esc(custom || "默认：zknjjjx/tvbox 的 cmstv.json（自动加速）")}</small></div>
       <div class="setrow f" id="sReset"><span>恢复默认片源</span><small>清掉自定义地址</small></div>
-      <div class="setrow f" id="sBox"><span>爬虫接口</span><small id="sBoxS">${esc(boxLabel())}</small></div>
+      <div class="setrow f" id="sBox"><span>TVBox 接口</span><small id="sBoxS">${esc(boxLabel())}</small></div>
       <div class="setrow f" id="sUpd"><span>检查更新</span><small id="sUpdS">当前 ${APP ? esc(NN.version()) : "dev"}${UPD.latest ? (hasNew() ? ` · 有新版 ${esc(UPD.latest.version)}，按 OK 升级` : " · 已是最新") : ""}</small></div>
       <div class="setrow f" id="sApk"><span>安装包残留</span><small id="sApkS">${(() => { let a = { n: 0 }; try { a = APP && NN.apkInfo ? JSON.parse(NN.apkInfo()) : a; } catch (e) {} return a.n ? `${a.n} 个 · ${a.mb} MB，按 OK 删除` : "没有残留，已全部删除"; })()}</small></div>
       <div class="setrow f" id="sClear"><span>清除观看记录</span><small>${histAll().length} 条</small></div>
@@ -960,13 +954,13 @@ const PAGES = {
       $("#uOk")._ok = async () => { const v = $("#uIn").value.trim(); cfg.set("srcUrl", v === DEF_SRC ? "" : v); closeLayer(); toast("正在加载新片源…"); await loadSources(true); toast(`片源：${SRC.list.length} 个`); render("settings"); };
     };
     $("#sBox")._ok = () => {
-      const sel = cfg.get("boxSel", BOX_DEF), opts = BOX_PRESETS.map(p => [p.name, p.name]).concat([["custom", "自定义地址"], ["off", "不用爬虫源"]]);
-      openLayer(`<div class="panel"><h2>爬虫接口</h2><p style="opacity:.7">TVBox 接口里的爬虫源和采集站一起搜索、测速、自动挑最快的。网盘、扫码、直播类已去掉。</p>
+      const sel = cfg.get("boxSel", BOX_DEF), opts = BOX_PRESETS.map(p => [p.name, "预设：" + p.name]).concat([["custom", "自定义接口"], ["off", "不用"]]);
+      openLayer(`<div class="panel"><h2>TVBox 接口</h2><p style="opacity:.7">和 TVBox 一样填一个接口，里面的爬虫源和采集站一起搜索、测速、自动挑最快的；官源用接口自带的解析。网盘、扫码、直播类不用。</p>
         <div class="acts boxopts" style="flex-wrap:wrap;margin-top:1.2rem">${opts.map(o => `<div class="btn f${o[0] === sel ? " pri" : ""}" data-o="${esc(o[0])}">${esc(o[1])}</div>`).join("")}</div></div>`, `.boxopts .btn[data-o="${sel}"]`);
-      const apply = async v => { cfg.set("boxSel", v); closeLayer(); toast(v === "off" ? "已停用爬虫源" : "正在加载接口…"); await boxLoad(true); toast(v === "off" ? "已停用爬虫源" : `爬虫接口：${BOX.state}`); render("settings"); };
+      const apply = async v => { cfg.set("boxSel", v); closeLayer(); toast(v === "off" ? "已停用爬虫源" : "正在加载接口…"); await boxLoad(true); toast(v === "off" ? "已停用爬虫源" : `TVBox 接口：${BOX.state}`); render("settings"); };
       $$(".boxopts .btn").forEach(b => { b._ok = () => {
         if (b.dataset.o !== "custom") { apply(b.dataset.o); return; }
-        openLayer(`<div class="panel"><h2>自定义爬虫接口</h2><p style="opacity:.7">填 TVBox 配置地址，支持加密和图片伪装的接口。</p>
+        openLayer(`<div class="panel"><h2>自定义 TVBox 接口</h2><p style="opacity:.7">填 TVBox 配置地址（如老刘备、王二小、肥猫），支持多仓、加密和图片伪装。</p>
           <div class="sbox f" style="margin:1.2rem 0 0;max-width:none" id="bBox"><input id="bIn" value="${esc(cfg.get("boxUrl", ""))}"></div>
           <div class="acts" style="margin-top:1.6rem"><div class="btn pri f" id="bOk">保存</div><div class="btn f" id="bNo">取消</div></div></div>`, "#bBox");
         $("#bBox")._ok = () => $("#bIn").focus();
@@ -991,7 +985,7 @@ let resolving = null;
 function boxLabel() {
   const sel = cfg.get("boxSel", BOX_DEF);
   if (sel === "off") return "不用爬虫源";
-  const nm = sel === "custom" ? "自定义" : sel;
+  const nm = sel === "custom" ? cfg.get("boxUrl", "自定义").replace(/^https?:\/\//, "").slice(0, 40) : sel;
   return `${nm} · ${BOX.state || "未加载"}${BOX.sites.length ? "（" + ["jar", "js", "py"].map(k => [k, BOX.sites.filter(s => s.kind === k).length]).filter(x => x[1]).map(x => `${x[0] === "jar" ? "Java" : x[0] === "js" ? "JS" : "Python"} ${x[1]}`).join("、") + "）" : ""}`;
 }
 

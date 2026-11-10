@@ -11,8 +11,8 @@ android {
         applicationId 'com.niuniu.tv2'
         minSdk 21
         targetSdk 30
-        versionCode 62
-        versionName '3.0.2'
+        versionCode 63
+        versionName '3.0.3'
         multiDexEnabled true
         // 爬虫 jar 里的 .so 和 Python 只有 ARM；x86_64 给模拟器调试用
         ndk { abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86_64' }

@@ -68,19 +68,6 @@ public class Box {
     /** JSON 解析接口（配置 parses 里 type=1 的）：地址后拼官网播放页，返回 {"url":"…m3u8"} */
     static class Jx { String name, url; List<String> flags = new ArrayList<>(); Map<String, String> headers = new HashMap<>(); }
     private static final List<Jx> jxs = Collections.synchronizedList(new ArrayList<Jx>());
-    /** 配置里一个 JSON 解析都没有时（如饭太硬）用的备用，取自各热门接口公开配置 */
-    private static final String[] JX_FALLBACK = {
-        "http://122.228.84.103:7777/api/?key=4Dk5tdayvY6NZufEMG&url=",
-        "http://110.42.7.182:880/api/?key=7e84f07dc78fbb3406d64a1ab7d966b3&url=",
-        "http://43.136.176.188:91/api/?key=4ef232e96172b0bda78d393c695fe7c4&url=",
-        "http://pan.qiaoji8.com/tvbox/neibu.php?url=",
-        "http://json.youguo520.top/fufeng/?url=",
-        "http://lanlan.ckflv.cn/?url=",
-        "https://api.json.icu/api/?key=b1f3b1a9e1c0a42ae969db10bd315a95&url=",
-        "http://pandown.pro/app/kkdy.php?url=",
-        "http://39.104.230.177:1122/lxjx/myyk.php?url=",
-        "http://pan.qiaoji8.com/tvbox/gouzi.php?url=",
-    };
 
     static void init(Context c) { if (app == null) app = c.getApplicationContext(); }
 
@@ -247,7 +234,6 @@ public class Box {
             }
             jxs.add(j);
         }
-        if (jxs.isEmpty()) for (String u : JX_FALLBACK) { Jx j = new Jx(); j.name = "备用"; j.url = u; jxs.add(j); }
         if (hasPy) { try { py.setConfig(o.toString()); } catch (Throwable e) { Log.w(TAG, "py cfg " + e); } }
     }
 
@@ -397,9 +383,9 @@ public class Box {
             if (url.startsWith("proxy://")) url = url.replace("proxy://", "http://127.0.0.1:" + BoxServer.port + "/proxy?");
             if (!pre.isEmpty() && parse == 0 && jx == 0 && url.startsWith("http")) url = pre + url;
             else if ((parse == 1 || jx == 1) && url.startsWith("http")) {
-                // 官源：官网播放页 → JSON 解析拿直链（网页解析/嗅探留到 3.1）
+                // 官源：官网播放页 → 只用接口自己配置的 JSON 解析拿直链（App 不内置解析；网页解析/嗅探留到 3.1）
                 Res j = jsonJx(flag, url, Math.min(9000, Math.max(5000, timeoutMs)));
-                if (j == null) { r.err = "解析失败"; resolved.put(boxUrl, r); return null; }
+                if (j == null) { r.err = jxs.isEmpty() ? "接口没配解析" : "解析失败"; resolved.put(boxUrl, r); return null; }
                 j.at = r.at; resolved.put(boxUrl, j);
                 String host = host(j.url); if (host != null && !j.headers.isEmpty()) hostHeaders.put(host, j.headers);
                 return j;
@@ -423,6 +409,7 @@ public class Box {
         List<Jx> all = new ArrayList<>(jxs), use = new ArrayList<>();
         for (Jx j : all) if (j.flags.isEmpty() || j.flags.contains(flag)) use.add(j);
         if (use.isEmpty()) use = all;
+        if (use.isEmpty()) return null;
         if (use.size() > 8) use = use.subList(0, 8);
         final java.util.concurrent.BlockingQueue<Res> q = new java.util.concurrent.LinkedBlockingQueue<>();
         final java.util.concurrent.atomic.AtomicInteger left = new java.util.concurrent.atomic.AtomicInteger(use.size());
