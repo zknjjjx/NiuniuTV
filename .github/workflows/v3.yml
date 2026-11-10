@@ -19,8 +19,8 @@ jobs:
         with: { distribution: temurin, java-version: 17 }
       - uses: gradle/actions/setup-gradle@v4
         with: { gradle-version: "8.7" }
-      - name: Python 3.10（Chaquopy 打包爬虫运行环境用）
-        run: python3.10 --version && python3.10 -m pip --version || sudo apt-get install -y python3-pip
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.8" }
       - name: 更新内置片源快照
         run: curl -fsSL --retry 3 https://raw.githubusercontent.com/zknjjjx/tvbox/main/cmstv.json -o /tmp/s.json && python3 -c "import json;json.load(open('/tmp/s.json'))" && cp /tmp/s.json app/src/main/assets/web/sources.json || true
       - run: gradle assembleRelease --no-daemon --stacktrace

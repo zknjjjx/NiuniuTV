@@ -277,6 +277,7 @@ public class PlayerActivity extends Activity {
             } }, "box-resolve").start();
             return;
         }
+        boxTok++;
         loadUrl(url, pos);
     }
 

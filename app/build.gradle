@@ -73,16 +73,16 @@ dependencies {
 
 chaquopy {
     defaultConfig {
-        version = "3.10"
-        buildPython("python3.10")
+        version = "3.8"
+        buildPython("python3.8")
         pip {
-            install "lxml"
-            install "ujson"
+            install "lxml==4.6.3"
+            install "ujson==1.35"
             install "pyquery==2.0.0"
             install "requests"
             install "jsonpath"
             install "cachetools"
-            install "pycryptodome"
+            install "pycryptodome==3.9.4"
             install "beautifulsoup4"
         }
     }
