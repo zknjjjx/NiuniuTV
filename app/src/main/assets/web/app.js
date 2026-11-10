@@ -1465,7 +1465,11 @@ document.addEventListener("keydown", (e) => {
     const dir = { 37: "left", 38: "up", 39: "right", 40: "down" }[k];
     const before = F.cur;
     F.user = true;
-    if (dir === "up" && before && before.classList.contains("chip") && before.closest("#page")) {
+    const ring = (dir === "left" || dir === "right") && before && (before.closest("#tabs") ? $$("#tabs .tab") : before.classList.contains("chip") && before.closest("#page .chips") ? $$(".chip", before.closest(".chips")) : null);
+    const ri = ring ? ring.indexOf(before) : -1;
+    if (ri >= 0 && ring.length > 1 && (dir === "right" ? ri === ring.length - 1 : ri === 0)) {
+      F.set(ring[dir === "right" ? 0 : ring.length - 1]);
+    } else if (dir === "up" && before && before.classList.contains("chip") && before.closest("#page")) {
       F.set($("#tabs .tab.on") || $("#tabs .tab"), true);
     } else if (dir === "down" && before && before.classList.contains("chip") && before.closest("#page") && $("#grid .card.f")) {
       clearTimeout(before._t);
