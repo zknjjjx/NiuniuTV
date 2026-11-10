@@ -46,7 +46,10 @@ public class Box {
     static final String TAG = "NNBox";
     static final String UA = "okhttp/3.15";
     /** 网盘、扫码、登录、推送、直播、听书、音乐等：老人用不了或不是影视，直接不要 */
-    static final Pattern SKIP = Pattern.compile("盘|阿里|夸克|UC|uc|115|天翼|189|123|迅雷|百度|PikPak|pikpak|Alist|alist|AList|网盘|云|扫码|登录|推送|Push|push|直播|虎牙|斗鱼|听书|有声|音乐|歌|舞|KTV|ktv|DJ|戏曲|广播|电台|体育|球|配置|更新|分享|公告|说明|DIY|diy|emby|Emby|webdav|WebDAV|Bili|bili|哔哩|哔哔|B站|YouTube|Youtube|油管|教育|课堂|小学|初中|高中|少儿|儿歌|漫画|小说|书|弹幕|磁力|BT|bt搜|种子|Pan|Quark|Ali|Yun|Baidu|Xunlei|Wo[A-Z0-9]|So(Guard)?$|Sou");
+    /** 站名：只认明确的非影视词，不用「云」「球」「舞」「弹幕」这类会误伤的单字 */
+    static final Pattern SKIP = Pattern.compile("网盘|云盘|阿里|夸克|天翼|迅雷|百度|PikPak|pikpak|Alist|alist|AList|扫码|登录|推送|直播|虎牙|斗鱼|听书|评书|有声|音乐|歌曲|演唱会|MV|KTV|ktv|舞曲|跳舞|戏曲|相声|广播|电台|体育|看球|配置|设置|公告|说明|DIY|diy|Emby|emby|WebDAV|webdav|哔哩|哔哔|B站|YouTube|Youtube|油管|教育|课堂|小学|初中|高中|少儿|儿歌|启蒙|漫画|小说|磁力|种子|网红|急救|壁纸|本地|商店|市场|JustLive|盘搜|四盘|易搜|DJ|BT");
+    /** 爬虫类名/脚本地址：网盘、分享、搜盘、直播、B站、推送、配置等类 */
+    static final Pattern SKIP_API = Pattern.compile("(?i)pan|share|aliyun|alips|quark|thunder|xunlei|p115|ucshare|pikpak|alist|webdav|samba|wogg|wobg|wo4k|wexwo|upyun|yiso|csp_jso|jiansou|tgyun|seedhub|s_zps|fishps|yisou|hdh\\b|tzfile|xiaozhang|fourkhdr|bili|kanqiu|live|push|config|market|localfile|csp_local|music|kugou|kuwo|djuu|firstaid|wallpaper|sport|(?-i:TY(Guard)?$)");
     static final Pattern ADULT = Pattern.compile("成人|福利|伦理|色|情色|AV|av|里番|写真|18\\+|🔞");
 
     static class Site { String key, name, api, ext, jar; int type; }
@@ -198,15 +201,17 @@ public class Box {
             }
             if (type != 3) continue;
             if (s.optInt("searchable", 1) == 0) continue;
-            if (SKIP.matcher(name).find() || SKIP.matcher(api).find()) continue;
+            if (SKIP.matcher(name).find() || SKIP_API.matcher(api).find()) continue;
             Site t = new Site();
             t.key = s.optString("key", api + i); t.name = clean(name); t.api = api; t.type = type;
             Object ext = s.opt("ext");
             t.ext = ext == null ? "" : ext instanceof JSONObject || ext instanceof JSONArray ? ext.toString() : String.valueOf(ext);
             t.jar = s.optString("jar", "");
             if (!t.jar.isEmpty()) t.jar = abs(base, t.jar);
+            // 老写法：api 写 py_xxx，脚本地址放在 ext
+            if (api.startsWith("py_") && t.ext.contains(".py")) { t.api = abs(base, t.ext); t.ext = ""; }
             if (t.name.isEmpty()) t.name = t.key;
-            if (api.contains(".py")) hasPy = true;
+            if (t.api.contains(".py")) hasPy = true;
             sites.add(t); byKey.put(t.key, t);
         }
         cmsJson = cms.toString();
