@@ -291,7 +291,9 @@ function parseEpisodes(v) {
   });
   return groups.filter((g) => g.m3u8);
 }
-function resolve(name, year, onFound) {
+const CAM = /枪版|槍版|抢先|搶先|抢鲜|尝鲜版|偷拍|(^|[^a-z])(hd)?(tc|ts|cam|hdcam|telesync|telecine)([^a-z]|$)/i;
+const isCam = (v, eps) => eps.length <= 3 && ([v.vod_remarks, v.vod_version, v.vod_play_note].some((x) => x && CAM.test(String(x))) || eps.some((e) => CAM.test(e.name)));
+function resolve(name, year, onFound, onCam) {
   const want = canon(name);
   let alive = true, idx = 0, running = 0;
   const sites = SRC.list.slice();
@@ -316,6 +318,10 @@ function resolve(name, year, onFound) {
               if (year && /^\d{4}$/.test(vy) && Math.abs(+vy - +year) > 1) continue;
               const g = parseEpisodes(v);
               if (!g.length) continue;
+              if (isCam(v, g[0].eps)) {
+                if (onCam) onCam(s.name);
+                continue;
+              }
               onFound({ site: s.name, api: s.api, eps: g[0].eps, remarks: v.vod_remarks || "", ms: Date.now() - t0, rank, bps: null });
               break;
             }
@@ -914,7 +920,7 @@ const PAGES = {
         $(".dtwrap").insertBefore($("#epsSec"), $("#castRow"));
       }
       const key = histKey({ id: it.id, type: kind, title: it.title });
-      const st = { srcs: [], done: false, probing: 0, probed: 0 };
+      const st = { srcs: [], done: false, probing: 0, probed: 0, cam: 0 };
       let meta = { title: it.title, year: it.year, pic: it.pic };
       const hist = () => histAll().find((h) => h.key === key);
       const playLabel = () => {
@@ -928,11 +934,11 @@ const PAGES = {
         if (!el) return;
         if (!st.srcs.length) {
           lamp.className = "lamp " + (st.done ? "bad" : "wait");
-          el.textContent = st.done ? "\u6CA1\u627E\u5230\u8FD9\u90E8\u7247\u7684\u7247\u6E90" : "\u6B63\u5728\u5168\u7F51\u627E\u7247\u6E90\u2026";
+          el.textContent = st.done ? st.cam ? `\u53EA\u6709\u67AA\u7248\uFF08${st.cam} \u4E2A\uFF09\uFF0C\u5DF2\u8FC7\u6EE4\uFF0C\u7B49\u51FA\u4E86\u9AD8\u6E05\u518D\u6765` : "\u6CA1\u627E\u5230\u8FD9\u90E8\u7247\u7684\u7247\u6E90" : "\u6B63\u5728\u5168\u7F51\u627E\u7247\u6E90\u2026";
           return;
         }
         lamp.className = "lamp " + (ok.length ? "ok" : "wait");
-        el.textContent = `\u627E\u5230 ${st.srcs.length} \u4E2A\u7247\u6E90${st.done ? "" : "\uFF08\u8FD8\u5728\u627E\uFF09"}` + (ok.length ? ` \xB7 \u6700\u5FEB\u300C${ok[0].site}\u300D${(ok[0].bps / 1048576).toFixed(1)} MB/s` : st.probing ? " \xB7 \u6D4B\u901F\u4E2D" : "");
+        el.textContent = `\u627E\u5230 ${st.srcs.length} \u4E2A\u7247\u6E90${st.done ? "" : "\uFF08\u8FD8\u5728\u627E\uFF09"}${st.cam ? `\uFF0C\u5DF2\u6EE4\u6389 ${st.cam} \u4E2A\u67AA\u7248` : ""}` + (ok.length ? ` \xB7 \u6700\u5FEB\u300C${ok[0].site}\u300D${(ok[0].bps / 1048576).toFixed(1)} MB/s` : st.probing ? " \xB7 \u6D4B\u901F\u4E2D" : "");
       };
       const probeQ = [];
       const pump = () => {
@@ -981,7 +987,12 @@ const PAGES = {
           status();
           return;
         }
-        resolving = resolve(meta.title, meta.year, found);
+        resolving = resolve(meta.title, meta.year, found, () => {
+          if (tok === routeTok) {
+            st.cam++;
+            status();
+          }
+        });
         resolving.done.then(() => {
           if (tok === routeTok) {
             st.done = true;

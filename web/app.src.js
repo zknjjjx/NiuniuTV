@@ -169,8 +169,12 @@ function parseEpisodes(v) {
   });
   return groups.filter(g => g.m3u8);
 }
+/* 枪版（TC/TS/CAM、抢先版）：影院偷拍，画质差，直接不要 */
+const CAM = /枪版|槍版|抢先|搶先|抢鲜|尝鲜版|偷拍|(^|[^a-z])(hd)?(tc|ts|cam|hdcam|telesync|telecine)([^a-z]|$)/i;
+// 只看电影（≤3 集）：剧集、综艺的「抢先版」是会员提前看，画质正常
+const isCam = (v, eps) => eps.length <= 3 && ([v.vod_remarks, v.vod_version, v.vod_play_note].some(x => x && CAM.test(String(x))) || eps.some(e => CAM.test(e.name)));
 /* 在所有采集站里按片名找片源，找到一个回调一个 */
-function resolve(name, year, onFound) {
+function resolve(name, year, onFound, onCam) {
   const want = canon(name);
   let alive = true, idx = 0, running = 0;
   const sites = SRC.list.slice();
@@ -193,6 +197,7 @@ function resolve(name, year, onFound) {
               if (year && /^\d{4}$/.test(vy) && Math.abs(+vy - +year) > 1) continue;
               const g = parseEpisodes(v);
               if (!g.length) continue;
+              if (isCam(v, g[0].eps)) { if (onCam) onCam(s.name); continue; }
               onFound({ site: s.name, api: s.api, eps: g[0].eps, remarks: v.vod_remarks || "", ms: Date.now() - t0, rank, bps: null });
               break;
             }
@@ -583,7 +588,7 @@ const PAGES = {
     F.set($("#bPlay"));
     if (MOB) { const dt = $(".dt"); [".crew", ".intro", ".acts", ".srcline"].forEach(s => dt.appendChild($(s, dt))); $(".dtwrap").insertBefore($("#epsSec"), $("#castRow")); }
     const key = histKey({ id: it.id, type: kind, title: it.title });
-    const st = { srcs: [], done: false, probing: 0, probed: 0 };
+    const st = { srcs: [], done: false, probing: 0, probed: 0, cam: 0 };
     let meta = { title: it.title, year: it.year, pic: it.pic };
     const hist = () => histAll().find(h => h.key === key);
     const playLabel = () => {
@@ -595,9 +600,9 @@ const PAGES = {
       const ok = st.srcs.filter(s => s.bps > 0).sort((a, b) => b.bps - a.bps);
       const lamp = $(".srcline .lamp"), el = $("#srcSt");
       if (!el) return;
-      if (!st.srcs.length) { lamp.className = "lamp " + (st.done ? "bad" : "wait"); el.textContent = st.done ? "没找到这部片的片源" : "正在全网找片源…"; return; }
+      if (!st.srcs.length) { lamp.className = "lamp " + (st.done ? "bad" : "wait"); el.textContent = st.done ? (st.cam ? `只有枪版（${st.cam} 个），已过滤，等出了高清再来` : "没找到这部片的片源") : "正在全网找片源…"; return; }
       lamp.className = "lamp " + (ok.length ? "ok" : "wait");
-      el.textContent = `找到 ${st.srcs.length} 个片源${st.done ? "" : "（还在找）"}` + (ok.length ? ` · 最快「${ok[0].site}」${(ok[0].bps / 1048576).toFixed(1)} MB/s` : st.probing ? " · 测速中" : "");
+      el.textContent = `找到 ${st.srcs.length} 个片源${st.done ? "" : "（还在找）"}${st.cam ? `，已滤掉 ${st.cam} 个枪版` : ""}` + (ok.length ? ` · 最快「${ok[0].site}」${(ok[0].bps / 1048576).toFixed(1)} MB/s` : st.probing ? " · 测速中" : "");
     };
     // 后台测速：拿到片源就测，3 路并发（原生层排队）
     const probeQ = [];
@@ -633,7 +638,7 @@ const PAGES = {
     };
     const startResolve = () => {
       if (!SRC.list.length) { st.done = true; status(); return; }
-      resolving = resolve(meta.title, meta.year, found);
+      resolving = resolve(meta.title, meta.year, found, () => { if (tok === routeTok) { st.cam++; status(); } });
       resolving.done.then(() => { if (tok === routeTok) { st.done = true; status(); } });
     };
 
