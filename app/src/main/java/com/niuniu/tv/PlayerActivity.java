@@ -5,6 +5,7 @@ import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.TypedValue;
@@ -74,6 +75,8 @@ public class PlayerActivity extends Activity {
     };
     private final Runnable hideStatus = new Runnable() { public void run() { fade(status, false); } };
     private String curUrl = "";
+    private long errAt;
+    private int errN;
     private long bufSince = 0;
     private final Runnable posTick = new Runnable() { public void run() {
         reportPos();
@@ -188,7 +191,21 @@ public class PlayerActivity extends Activity {
                     player.prepare();
                     return;
                 }
-                switchSource("播放出错");
+                // 已经在播的片源偶尔出一次网络错（分片超时、CDN 抽风），先原地重试，别急着换源
+                long now = SystemClock.uptimeMillis();
+                if (now - errAt > 90_000L) errN = 0;
+                errAt = now;
+                int c = e.errorCode;
+                boolean net = c >= 2000 && c < 3000;
+                if (c == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS || c == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED) Pre.backoff(curUrl);
+                if (started && net && errN < 3) {
+                    errN++;
+                    showStatus("网络波动，重试中（" + errN + "/3）", 2500);
+                    h.postDelayed(new Runnable() { public void run() { if (player != null) { player.prepare(); player.play(); } } }, 800L * errN);
+                    return;
+                }
+                errN = 0;
+                switchSource("播放出错（" + e.getErrorCodeName().replace("ERROR_CODE_", "") + "）");
             }
         });
         if (resumePos <= 0) {

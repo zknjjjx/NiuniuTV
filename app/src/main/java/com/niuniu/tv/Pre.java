@@ -149,6 +149,11 @@ public class Pre {
         }
     }
 
+    /** 播放器遇到 HTTP 错误 / 连不上：可能是对方嫌连接多，这一集预下载退回单路 */
+    static synchronized void backoff(String url) {
+        if (job != null && job.url.equals(url)) job.lanes = 1;
+    }
+
     /** 最近 ms 毫秒内后台下载还有进账 */
     static synchronized boolean progressing(String url, long ms) {
         return job != null && job.url.equals(url) && !job.dead && SystemClock.uptimeMillis() - job.lastData < ms;
@@ -182,6 +187,7 @@ public class Pre {
         final String url;
         volatile long posUs, aheadUs, lastData, bufUs;
         volatile boolean dead, gated, ready, everReady;
+        volatile int lanes = WORKERS;
         final java.util.concurrent.ConcurrentHashMap<Seg, CacheWriter> active = new java.util.concurrent.ConcurrentHashMap<>();
         final List<Thread> helpers = new ArrayList<>();
         volatile List<Seg> segs = new ArrayList<>();
@@ -244,22 +250,25 @@ public class Pre {
                 this.segs = segs;
                 clearOthers(keys);
                 for (int i = 1; i < WORKERS && !dead; i++) {
-                    Thread t = new Thread(new Runnable() { public void run() { work(false); } }, "nn-pre" + i);
+                    final int lane = i;
+                    Thread t = new Thread(new Runnable() { public void run() { work(lane); } }, "nn-pre" + i);
                     t.setPriority(Thread.MIN_PRIORITY + 1);
                     synchronized (helpers) { helpers.add(t); }
                     t.start();
                 }
-                work(true);
+                work(0);
             } catch (Throwable ignore) {
             } finally { dead = true; }
         }
 
         /** 一个下载线程：反复挑一个没人在下的分片下载。main=true 的那个负责定时清理旧缓存 */
-        void work(boolean main) {
+        void work(int lane) {
+            boolean main = lane == 0;
             long lastClean = SystemClock.uptimeMillis();
             byte[] tmp = new byte[128 * 1024];
             while (!dead) {
                 if (main && SystemClock.uptimeMillis() - lastClean > 30000) { clearOthers(keys); lastClean = SystemClock.uptimeMillis(); }
+                if (lane >= lanes) { sleepQ(1000); continue; }
                 final Seg cur = pick();
                 if (cur == null) { sleepQ(500); continue; }
                 try {
