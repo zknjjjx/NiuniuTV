@@ -152,9 +152,18 @@ async function loadSources(force) {
 }
 
 /* ---------------- TVBox 接口（爬虫源）：原生层加载 jar / JS / Python 爬虫，这里负责搜索与组装片源 ---------------- */
-/* 和 TVBox 一样由用户填一个接口；App 只预设一条热门接口，随时可换 */
+/* 和 TVBox 一样一次只用一个接口：预设几条热门接口供切换，也可自定义地址 */
 const BOX_PRESETS = [
   { name: "饭太硬", urls: ["http://www.饭太硬.com/tv", "http://www.饭太硬.net/tv", "http://fty.888484.xyz/tv", "http://fty.xxooo.cf/tv"] },
+  { name: "肥猫", urls: ["http://肥猫.com/", "http://肥猫.net/", "http://hello.肥猫.com/", "https://6296.kstore.vip/fm.gif"] },
+  { name: "王二小", urls: ["http://tvbox.王二小放牛娃.top/", "https://9280.kstore.vip/newwex.json", "http://tv.999888987.xyz/"] },
+  { name: "老刘备", urls: ["https://raw.liucn.cc/box/m.json"] },
+  { name: "高天流云", urls: ["https://raw.githubusercontent.com/gaotianliuyun/gao/master/js.json"] },
+  { name: "南风", urls: ["https://raw.githubusercontent.com/yoursmile66/TVBox/main/XC.json"] },
+  { name: "俊佬", urls: ["http://home.jundie.top:81/top98.json"] },
+  { name: "摸鱼儿", urls: ["http://我不是.摸鱼儿.com", "http://我不是.摸鱼儿.top", "http://fish.y456y.com"] },
+  { name: "菜妮丝", urls: ["https://tv.菜妮丝.top"] },
+  { name: "小盒子", urls: ["http://xhztv.top/xhz", "http://xhztv.top/4k.json"] },
 ];
 const BOX_DEF = "饭太硬";
 const BOX = { sites: [], cms: [], state: "", ready: null };
@@ -954,8 +963,8 @@ const PAGES = {
       $("#uOk")._ok = async () => { const v = $("#uIn").value.trim(); cfg.set("srcUrl", v === DEF_SRC ? "" : v); closeLayer(); toast("正在加载新片源…"); await loadSources(true); toast(`片源：${SRC.list.length} 个`); render("settings"); };
     };
     $("#sBox")._ok = () => {
-      const sel = cfg.get("boxSel", BOX_DEF), opts = BOX_PRESETS.map(p => [p.name, "预设：" + p.name]).concat([["custom", "自定义接口"], ["off", "不用"]]);
-      openLayer(`<div class="panel"><h2>TVBox 接口</h2><p style="opacity:.7">和 TVBox 一样填一个接口，里面的爬虫源和采集站一起搜索、测速、自动挑最快的；官源用接口自带的解析。网盘、扫码、直播类不用。</p>
+      const sel = cfg.get("boxSel", BOX_DEF), opts = BOX_PRESETS.map(p => [p.name, p.name]).concat([["custom", "自定义接口"], ["off", "不用"]]);
+      openLayer(`<div class="panel"><h2>TVBox 接口</h2><p style="opacity:.7">一次用一个接口，选好就行。里面的爬虫源和采集站一起搜索、测速、自动挑最快的；官源用接口自带的解析。网盘、扫码、直播类不用。</p>
         <div class="acts boxopts" style="flex-wrap:wrap;margin-top:1.2rem">${opts.map(o => `<div class="btn f${o[0] === sel ? " pri" : ""}" data-o="${esc(o[0])}">${esc(o[1])}</div>`).join("")}</div></div>`, `.boxopts .btn[data-o="${sel}"]`);
       const apply = async v => { cfg.set("boxSel", v); closeLayer(); toast(v === "off" ? "已停用爬虫源" : "正在加载接口…"); await boxLoad(true); toast(v === "off" ? "已停用爬虫源" : `TVBox 接口：${BOX.state}`); render("settings"); };
       $$(".boxopts .btn").forEach(b => { b._ok = () => {

@@ -281,7 +281,16 @@ function loadSources(force) {
   });
 }
 const BOX_PRESETS = [
-  { name: "\u996D\u592A\u786C", urls: ["http://www.\u996D\u592A\u786C.com/tv", "http://www.\u996D\u592A\u786C.net/tv", "http://fty.888484.xyz/tv", "http://fty.xxooo.cf/tv"] }
+  { name: "\u996D\u592A\u786C", urls: ["http://www.\u996D\u592A\u786C.com/tv", "http://www.\u996D\u592A\u786C.net/tv", "http://fty.888484.xyz/tv", "http://fty.xxooo.cf/tv"] },
+  { name: "\u80A5\u732B", urls: ["http://\u80A5\u732B.com/", "http://\u80A5\u732B.net/", "http://hello.\u80A5\u732B.com/", "https://6296.kstore.vip/fm.gif"] },
+  { name: "\u738B\u4E8C\u5C0F", urls: ["http://tvbox.\u738B\u4E8C\u5C0F\u653E\u725B\u5A03.top/", "https://9280.kstore.vip/newwex.json", "http://tv.999888987.xyz/"] },
+  { name: "\u8001\u5218\u5907", urls: ["https://raw.liucn.cc/box/m.json"] },
+  { name: "\u9AD8\u5929\u6D41\u4E91", urls: ["https://raw.githubusercontent.com/gaotianliuyun/gao/master/js.json"] },
+  { name: "\u5357\u98CE", urls: ["https://raw.githubusercontent.com/yoursmile66/TVBox/main/XC.json"] },
+  { name: "\u4FCA\u4F6C", urls: ["http://home.jundie.top:81/top98.json"] },
+  { name: "\u6478\u9C7C\u513F", urls: ["http://\u6211\u4E0D\u662F.\u6478\u9C7C\u513F.com", "http://\u6211\u4E0D\u662F.\u6478\u9C7C\u513F.top", "http://fish.y456y.com"] },
+  { name: "\u83DC\u59AE\u4E1D", urls: ["https://tv.\u83DC\u59AE\u4E1D.top"] },
+  { name: "\u5C0F\u76D2\u5B50", urls: ["http://xhztv.top/xhz", "http://xhztv.top/4k.json"] }
 ];
 const BOX_DEF = "\u996D\u592A\u786C";
 const BOX = { sites: [], cms: [], state: "", ready: null };
@@ -1499,8 +1508,8 @@ const PAGES = {
         });
       };
       $("#sBox")._ok = () => {
-        const sel = cfg.get("boxSel", BOX_DEF), opts = BOX_PRESETS.map((p) => [p.name, "\u9884\u8BBE\uFF1A" + p.name]).concat([["custom", "\u81EA\u5B9A\u4E49\u63A5\u53E3"], ["off", "\u4E0D\u7528"]]);
-        openLayer(`<div class="panel"><h2>TVBox \u63A5\u53E3</h2><p style="opacity:.7">\u548C TVBox \u4E00\u6837\u586B\u4E00\u4E2A\u63A5\u53E3\uFF0C\u91CC\u9762\u7684\u722C\u866B\u6E90\u548C\u91C7\u96C6\u7AD9\u4E00\u8D77\u641C\u7D22\u3001\u6D4B\u901F\u3001\u81EA\u52A8\u6311\u6700\u5FEB\u7684\uFF1B\u5B98\u6E90\u7528\u63A5\u53E3\u81EA\u5E26\u7684\u89E3\u6790\u3002\u7F51\u76D8\u3001\u626B\u7801\u3001\u76F4\u64AD\u7C7B\u4E0D\u7528\u3002</p>
+        const sel = cfg.get("boxSel", BOX_DEF), opts = BOX_PRESETS.map((p) => [p.name, p.name]).concat([["custom", "\u81EA\u5B9A\u4E49\u63A5\u53E3"], ["off", "\u4E0D\u7528"]]);
+        openLayer(`<div class="panel"><h2>TVBox \u63A5\u53E3</h2><p style="opacity:.7">\u4E00\u6B21\u7528\u4E00\u4E2A\u63A5\u53E3\uFF0C\u9009\u597D\u5C31\u884C\u3002\u91CC\u9762\u7684\u722C\u866B\u6E90\u548C\u91C7\u96C6\u7AD9\u4E00\u8D77\u641C\u7D22\u3001\u6D4B\u901F\u3001\u81EA\u52A8\u6311\u6700\u5FEB\u7684\uFF1B\u5B98\u6E90\u7528\u63A5\u53E3\u81EA\u5E26\u7684\u89E3\u6790\u3002\u7F51\u76D8\u3001\u626B\u7801\u3001\u76F4\u64AD\u7C7B\u4E0D\u7528\u3002</p>
         <div class="acts boxopts" style="flex-wrap:wrap;margin-top:1.2rem">${opts.map((o) => `<div class="btn f${o[0] === sel ? " pri" : ""}" data-o="${esc(o[0])}">${esc(o[1])}</div>`).join("")}</div></div>`, `.boxopts .btn[data-o="${sel}"]`);
         const apply = (v) => __async(this, null, function* () {
           cfg.set("boxSel", v);
