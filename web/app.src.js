@@ -526,7 +526,7 @@ const PAGES = {
       ${HOME_ROWS.map((r, i) => rowHTML("row" + i, r[0], skel(8))).join("")}</div>`;
     bindCards($("#page"));
     let focused = false;
-    const focusFirst = () => { if (focused || tok !== routeTok) return; focused = true; if (bootFocus) { bootFocus = false; F.set($('#tabs .tab[data-k="home"]'), true); if (window.nnSplashGo) window.nnSplashGo(); return; } if (restore && restore.focus && document.contains(restore.focus)) F.set(restore.focus); else F.set($("#page .card.f")); };
+    const focusFirst = () => { if (focused || tok !== routeTok) return; focused = true; if (bootFocus) { bootFocus = false; F.set($('#tabs .tab[data-k="home"]'), true); if (window.nnSplashGo) window.nnSplashGo(firstPics()); return; } if (restore && restore.focus && document.contains(restore.focus)) F.set(restore.focus); else F.set($("#page .card.f")); };
     const loadRow = i => {
       const r = HOME_ROWS[i];
       return dbList(r[1], r[2], r[3], 0, 24).then(d => {
@@ -537,12 +537,14 @@ const PAGES = {
         if (i === 0) focusFirst();
       }).catch(() => { const t = $(`#row${i} .track`); if (t) t.innerHTML = `<div class="empty">豆瓣数据加载失败，稍后再试</div>`; });
     };
-    loadRow(0).then(() => { for (let i = 1; i < HOME_ROWS.length; i++) loadRow(i); });
+    // 第一行先出；其余几行等启动动画放完再加载，免得动画时解码几十张海报卡顿
+    const firstPics = () => $$("#row0 .card .pic").slice(0, 8).map(e => (/url\('([^']+)'\)/.exec(e.getAttribute("style") || "") || [])[1]).filter(Boolean);
+    loadRow(0).then(() => afterSplash(() => { for (let i = 1; i < HOME_ROWS.length; i++) loadRow(i); }));
   },
 
-  cat(tok, key) {
+  cat(tok, key, restore) {
     const chips = CHIPS[key], name = { movie: "电影", tv: "剧集", anime: "动漫", show: "综艺" }[key];
-    let ci = store.get("chip:" + key, 0);
+    let ci = restore ? store.get("chip:" + key, 0) : 0;   // 从一级菜单进来总是第一个；从详情页返回才恢复原来的
     if (!chips[ci]) ci = 0;
     $("#page").innerHTML = `<div class="scroll" data-pad="6"><div class="pagehead sec cathead"><h2>${name}</h2><span id="cnt" style="display:none"></span>
       <div class="chips" data-g="chips">${chips.map((c, i) => `<div class="chip f${i === ci ? " on" : ""}" data-i="${i}">${c[0]}</div>`).join("")}</div></div>
@@ -966,9 +968,12 @@ window.nnMenu = () => { if (F.cur && F.cur._menu) F.cur._menu(); };
 
 /* ---------------- 启动 ---------------- */
 // 启动动画：首页内容就绪（或最多等 3 秒）后，狗狗从屏幕中央缩到左上角 logo 的位置
+let splashOver = false, splashQ = [];
+function afterSplash(f) { if (splashOver) f(); else splashQ.push(f); }
 function splash() {
   const sp = $("#splash"), body = document.body;
-  const end = () => { document.documentElement.classList.remove("splash0"); if (sp && sp.parentNode) sp.parentNode.removeChild(sp); body.classList.remove("booting", "reveal"); try { if (APP && NN.splashDone) NN.splashDone(); } catch (e) {} };
+  const end = () => {
+    if (!splashOver) { splashOver = true; setTimeout(() => { splashQ.splice(0).forEach(f => { try { f(); } catch (e) {} }); }, 60); } document.documentElement.classList.remove("splash0"); if (sp && sp.parentNode) sp.parentNode.removeChild(sp); body.classList.remove("booting", "reveal"); try { if (APP && NN.splashDone) NN.splashDone(); } catch (e) {} };
   if (!sp || MOB) { end(); window.nnSplashGo = () => {}; return; }
   const t0 = Date.now(); let gone = false;
   const go = () => {
@@ -977,13 +982,23 @@ function splash() {
     const a = dog.getBoundingClientRect(), b = logo.getBoundingClientRect();
     if (!a.width || !b.width) { end(); return; }
     const s = b.width / a.width, dx = b.left + b.width / 2 - (a.left + a.width / 2), dy = b.top + b.height / 2 - (a.top + a.height / 2);
-    const tf = `translate(${dx}px,${dy}px) scale(${s})`;
+    const tf = `translate3d(${dx}px,${dy}px,0) scale(${s})`;
     dog.style.webkitTransform = tf; dog.style.transform = tf;
     sp.classList.add("go");
     body.classList.add("reveal");
     setTimeout(end, 1150);
   };
-  window.nnSplashGo = () => setTimeout(go, Math.max(0, 700 - (Date.now() - t0)));   // 狗狗至少停留 0.7 秒
+  // 狗狗至少停留 0.7 秒；首行前几张海报先解码好（最多再等 1.2 秒），动画期间不再有重活
+  window.nnSplashGo = pics => {
+    const tw = Date.now();
+    let left = (pics || []).length;
+    const fire = () => setTimeout(go, Math.max(0, 700 - (Date.now() - t0)));
+    if (!left) { fire(); return; }
+    let done = false;
+    const one = () => { if (!done && --left <= 0) { done = true; fire(); } };
+    pics.forEach(u => { const im = new Image(); im.onload = im.onerror = one; im.src = u; });
+    setTimeout(() => { if (!done) { done = true; fire(); } }, 1200);
+  };
   setTimeout(go, 3000);
 }
 function clock() { const d = new Date(); $("#clock").textContent = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; }

@@ -836,7 +836,7 @@ const PAGES = {
       if (bootFocus) {
         bootFocus = false;
         F.set($('#tabs .tab[data-k="home"]'), true);
-        if (window.nnSplashGo) window.nnSplashGo();
+        if (window.nnSplashGo) window.nnSplashGo(firstPics());
         return;
       }
       if (restore && restore.focus && document.contains(restore.focus)) F.set(restore.focus);
@@ -855,13 +855,14 @@ const PAGES = {
         if (t) t.innerHTML = `<div class="empty">\u8C46\u74E3\u6570\u636E\u52A0\u8F7D\u5931\u8D25\uFF0C\u7A0D\u540E\u518D\u8BD5</div>`;
       });
     };
-    loadRow(0).then(() => {
+    const firstPics = () => $$("#row0 .card .pic").slice(0, 8).map((e) => (/url\('([^']+)'\)/.exec(e.getAttribute("style") || "") || [])[1]).filter(Boolean);
+    loadRow(0).then(() => afterSplash(() => {
       for (let i = 1; i < HOME_ROWS.length; i++) loadRow(i);
-    });
+    }));
   },
-  cat(tok, key) {
+  cat(tok, key, restore) {
     const chips = CHIPS[key], name = { movie: "\u7535\u5F71", tv: "\u5267\u96C6", anime: "\u52A8\u6F2B", show: "\u7EFC\u827A" }[key];
-    let ci = store.get("chip:" + key, 0);
+    let ci = restore ? store.get("chip:" + key, 0) : 0;
     if (!chips[ci]) ci = 0;
     $("#page").innerHTML = `<div class="scroll" data-pad="6"><div class="pagehead sec cathead"><h2>${name}</h2><span id="cnt" style="display:none"></span>
       <div class="chips" data-g="chips">${chips.map((c, i) => `<div class="chip f${i === ci ? " on" : ""}" data-i="${i}">${c[0]}</div>`).join("")}</div></div>
@@ -1513,9 +1514,25 @@ document.addEventListener("keydown", (e) => {
 window.nnMenu = () => {
   if (F.cur && F.cur._menu) F.cur._menu();
 };
+let splashOver = false, splashQ = [];
+function afterSplash(f) {
+  if (splashOver) f();
+  else splashQ.push(f);
+}
 function splash() {
   const sp = $("#splash"), body = document.body;
   const end = () => {
+    if (!splashOver) {
+      splashOver = true;
+      setTimeout(() => {
+        splashQ.splice(0).forEach((f) => {
+          try {
+            f();
+          } catch (e) {
+          }
+        });
+      }, 60);
+    }
     document.documentElement.classList.remove("splash0");
     if (sp && sp.parentNode) sp.parentNode.removeChild(sp);
     body.classList.remove("booting", "reveal");
@@ -1542,14 +1559,40 @@ function splash() {
       return;
     }
     const s = b.width / a.width, dx = b.left + b.width / 2 - (a.left + a.width / 2), dy = b.top + b.height / 2 - (a.top + a.height / 2);
-    const tf = `translate(${dx}px,${dy}px) scale(${s})`;
+    const tf = `translate3d(${dx}px,${dy}px,0) scale(${s})`;
     dog.style.webkitTransform = tf;
     dog.style.transform = tf;
     sp.classList.add("go");
     body.classList.add("reveal");
     setTimeout(end, 1150);
   };
-  window.nnSplashGo = () => setTimeout(go2, Math.max(0, 700 - (Date.now() - t0)));
+  window.nnSplashGo = (pics) => {
+    const tw = Date.now();
+    let left = (pics || []).length;
+    const fire = () => setTimeout(go2, Math.max(0, 700 - (Date.now() - t0)));
+    if (!left) {
+      fire();
+      return;
+    }
+    let done = false;
+    const one = () => {
+      if (!done && --left <= 0) {
+        done = true;
+        fire();
+      }
+    };
+    pics.forEach((u) => {
+      const im = new Image();
+      im.onload = im.onerror = one;
+      im.src = u;
+    });
+    setTimeout(() => {
+      if (!done) {
+        done = true;
+        fire();
+      }
+    }, 1200);
+  };
   setTimeout(go2, 3e3);
 }
 function clock() {
