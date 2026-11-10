@@ -43,6 +43,8 @@ import java.util.Set;
 public class Pre {
     static final long PRELOAD_MS = 3 * 60_000L;   // 详情页预载
     static final long AHEAD_MS = 10 * 60_000L;    // 播放时领先
+    static final int WORKERS = 3;                  // 同时下几个分片：采集站多是按单条连接限速，三路能快三四倍
+    static final long NEAR_US = 30_000_000L;       // 缓冲中只帮播放器下眼前 30 秒
 
     private static SimpleCache cache;
     private static long capBytes;
@@ -137,10 +139,13 @@ public class Pre {
         if (job == null || !job.url.equals(url)) return;
         long p = Math.max(0, posMs) * 1000;
         job.posUs = p; job.bufUs = Math.max(p, bufMs * 1000); job.ready = ready;
+        if (ready) job.everReady = true;
         if (!ready) {
-            Seg c = job.curSeg; CacheWriter w = job.writer;
             // 正在下的分片不是眼前要用的（比如刚快进），立刻停下让路
-            if (c != null && w != null && (c.endUs <= p || c.startUs > p + 15_000_000L)) w.cancel();
+            for (Map.Entry<Seg, CacheWriter> e : job.active.entrySet()) {
+                Seg c = e.getKey();
+                if (c.endUs <= p || c.startUs > p + NEAR_US) e.getValue().cancel();
+            }
         }
     }
 
@@ -171,15 +176,16 @@ public class Pre {
         } catch (Throwable e) { return false; }
     }
 
-    static class Seg { DataSpec spec; String key; long startUs, endUs, size; boolean done; int fails; }
+    static class Seg { DataSpec spec; String key; long startUs, endUs; volatile long size; volatile boolean done, busy; int fails; }
 
     static class Job extends Thread {
         final String url;
         volatile long posUs, aheadUs, lastData, bufUs;
-        volatile boolean dead, gated, ready;
-        volatile Seg curSeg;
-        volatile CacheWriter writer;
+        volatile boolean dead, gated, ready, everReady;
+        final java.util.concurrent.ConcurrentHashMap<Seg, CacheWriter> active = new java.util.concurrent.ConcurrentHashMap<>();
+        final List<Thread> helpers = new ArrayList<>();
         volatile List<Seg> segs = new ArrayList<>();
+        volatile Set<String> keys = new HashSet<>();
 
         Job(String url, long posMs, long aheadMs) {
             super("nn-pre");
@@ -187,7 +193,12 @@ public class Pre {
             setPriority(Thread.MIN_PRIORITY + 1);
         }
 
-        void halt() { dead = true; CacheWriter w = writer; if (w != null) w.cancel(); interrupt(); }
+        void halt() {
+            dead = true;
+            for (CacheWriter w : active.values()) w.cancel();
+            interrupt();
+            synchronized (helpers) { for (Thread t : helpers) t.interrupt(); }
+        }
 
         HlsPlaylist fetch(String u) throws IOException {
             DataSource s = new AdFilter.Factory(http()).createDataSource();
@@ -229,34 +240,44 @@ public class Pre {
                     segs.add(seg(u, s.byteRangeOffset, s.byteRangeLength, s.relativeStartTimeUs, s.relativeStartTimeUs + s.durationUs));
                 }
                 for (Seg s : segs) keys.add(s.key);
+                this.keys = keys;
                 this.segs = segs;
                 clearOthers(keys);
-                long lastClean = SystemClock.uptimeMillis();
-                byte[] tmp = new byte[128 * 1024];
-                while (!dead) {
-                    if (SystemClock.uptimeMillis() - lastClean > 30000) { clearOthers(keys); lastClean = SystemClock.uptimeMillis(); }
-                    Seg next = pick();
-                    if (next == null) { sleepQ(800); continue; }
-                    final Seg cur = next;
-                    curSeg = cur;
-                    try {
-                        CacheWriter w = new CacheWriter(new CacheDataSource(cache, http().createDataSource(), CacheDataSource.FLAG_BLOCK_ON_CACHE),
-                                cur.spec, tmp, new CacheWriter.ProgressListener() {
-                            public void onProgress(long len, long done, long nb) { if (nb > 0) lastData = SystemClock.uptimeMillis(); cur.size = done; }
-                        });
-                        writer = w;
-                        if (dead) break;
-                        w.cache();
-                        cur.done = true;
-                    } catch (Exception e) {
-                        if (dead) break;
-                        if (gated && !ready) continue;   // 被播放器让路取消的，不算失败
-                        if (++cur.fails >= 3) cur.done = true;   // 一个分片连失败 3 次就跳过，交给播放器自己拉
-                        else sleepQ(1000L * cur.fails);
-                    } finally { writer = null; curSeg = null; }
+                for (int i = 1; i < WORKERS && !dead; i++) {
+                    Thread t = new Thread(new Runnable() { public void run() { work(false); } }, "nn-pre" + i);
+                    t.setPriority(Thread.MIN_PRIORITY + 1);
+                    synchronized (helpers) { helpers.add(t); }
+                    t.start();
                 }
+                work(true);
             } catch (Throwable ignore) {
             } finally { dead = true; }
+        }
+
+        /** 一个下载线程：反复挑一个没人在下的分片下载。main=true 的那个负责定时清理旧缓存 */
+        void work(boolean main) {
+            long lastClean = SystemClock.uptimeMillis();
+            byte[] tmp = new byte[128 * 1024];
+            while (!dead) {
+                if (main && SystemClock.uptimeMillis() - lastClean > 30000) { clearOthers(keys); lastClean = SystemClock.uptimeMillis(); }
+                final Seg cur = pick();
+                if (cur == null) { sleepQ(500); continue; }
+                try {
+                    CacheWriter w = new CacheWriter(new CacheDataSource(cache, http().createDataSource(), CacheDataSource.FLAG_BLOCK_ON_CACHE),
+                            cur.spec, tmp, new CacheWriter.ProgressListener() {
+                        public void onProgress(long len, long done, long nb) { if (nb > 0) lastData = SystemClock.uptimeMillis(); cur.size = done; }
+                    });
+                    active.put(cur, w);
+                    if (dead) break;
+                    w.cache();
+                    cur.done = true;
+                } catch (Exception e) {
+                    if (dead) break;
+                    if (gated && !ready) { sleepQ(300); continue; }   // 被播放器让路取消的，不算失败
+                    synchronized (this) { if (++cur.fails >= 3) cur.done = true; }   // 一个分片连失败 3 次就跳过，交给播放器自己拉
+                    if (!cur.done) sleepQ(1000L * cur.fails);
+                } finally { active.remove(cur); cur.busy = false; }
+            }
         }
 
         Seg seg(Uri u, long off, long len, long st, long en) {
@@ -268,17 +289,25 @@ public class Pre {
         }
 
         /** 选下一个要下载的分片：初始化段优先，其次从播放位置往后、在领先窗口内第一个没下载的 */
-        Seg pick() {
+        synchronized Seg pick() {
             long p = posUs, lim = p + aheadUs, ahead = 0, from = p;
+            boolean near = false;
             if (gated) {
-                if (!ready || bufUs - p < 15_000_000L) return null;
-                from = bufUs;   // 播放器手里已有的不重复拉，从它缓冲的尽头往后下
+                if (!everReady) return null;   // 起播前一律让路
+                if (!ready || bufUs - p < 15_000_000L) {
+                    // 卡顿/缓冲不足：播放器自己拉眼前这一段，我们并行帮它拉后面几段
+                    near = true; lim = p + NEAR_US;
+                } else from = bufUs;   // 播放器手里已有的不重复拉，从它缓冲的尽头往后下
             }
-            for (Seg s : segs) if (s.startUs < 0 && !s.done) return gated ? null : s;
+            for (Seg s : segs) if (s.startUs < 0 && !s.done && !s.busy) { if (gated) return null; s.busy = true; return s; }
             for (Seg s : segs) {
                 if (s.startUs < 0 || s.endUs <= from) continue;
                 if (s.startUs >= lim) return null;
-                if (!s.done) return ahead > capBytes * 6 / 10 ? null : s;
+                if (near && s.startUs <= p) continue;   // 眼前这段留给播放器
+                if (!s.done && !s.busy) {
+                    if (ahead > capBytes * 6 / 10) return null;
+                    s.busy = true; return s;
+                }
                 ahead += s.size;
             }
             return null;
