@@ -43,7 +43,7 @@ import java.util.Set;
 public class Pre {
     static final long PRELOAD_MS = 3 * 60_000L;   // 详情页预载
     static final long AHEAD_MS = 10 * 60_000L;    // 播放时领先
-    static final int WORKERS = 3;                  // 同时下几个分片：采集站多是按单条连接限速，三路能快三四倍
+    static final int WORKERS = 5;                  // 同时下几个分片：采集站多是按单条连接限速，多路能快好几倍
     static final long NEAR_US = 30_000_000L;       // 缓冲中只帮播放器下眼前 30 秒
 
     private static SimpleCache cache;
