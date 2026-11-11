@@ -104,7 +104,7 @@ public class PlayerActivity extends Activity {
     private void crowdCheck() {
         if (!started || !autoSrc || sources == null || sources.length() < 2 || !Pre.crowded(curUrl)) return;
         JSONObject s = sources.optJSONObject(si);
-        if (s == null || s.optInt("h", 0) < 1000 || s.optLong("bps", 0) >= 0.9 * 1048576) return;
+        if (s == null || s.optInt("h", 0) < 1000 || s.optLong("bps", 0) >= crowdNeed(s)) return;
         if (Pre.cachedAheadMs(curUrl, player.getCurrentPosition()) >= 60000) return;
         switchSource("片源限制多路下载，单路不够 1080");
     }
@@ -909,6 +909,11 @@ public class PlayerActivity extends Activity {
     private static boolean crowdHost(JSONObject s) {
         try { return appCtx != null && Pre.isCrowdHost(appCtx, s.getJSONArray("eps").getJSONObject(0).optString("url")); } catch (Exception e) { return false; }
     }
+    /** 嫌连接多的站只能单路：知道码率就要单路速度够码率的 1.5 倍（至少 0.2 MB/s），不知道还按 0.9 MB/s */
+    static double crowdNeed(JSONObject s) {
+        long br = s.optLong("br", 0);
+        return br > 0 ? Math.max(0.2 * 1048576, br * 1.5) : 0.9 * 1048576;
+    }
     private static int tierOf(JSONObject s) {
         int hh = s.optInt("h", 0); long b = s.optLong("bps", 0);
         if (b < 0) return 0;
@@ -916,7 +921,7 @@ public class PlayerActivity extends Activity {
         if (durOff(s)) return 1;
         int r = hh >= 1000 ? 3 : (hh >= 700 || hh == 0) ? 2 : 1;
         // 5 路预下载：1080 单路 0.2 MB/s 就够；嫌连接多的域名只能单路，要 0.9 才排在 720 前
-        double need = r == 3 ? (crowdHost(s) ? 0.9 : 0.2) * 1048576 : r == 2 ? 0.15 * 1048576 : 0;
+        double need = r == 3 ? (crowdHost(s) ? crowdNeed(s) : 0.2 * 1048576) : r == 2 ? 0.15 * 1048576 : 0;
         return (b >= need ? r : 1) + 1;
     }
     private int bestSource() {
@@ -960,9 +965,15 @@ public class PlayerActivity extends Activity {
                     l = tv(17, 0xFFFFFFFF, "sans-serif"); l.setShadowLayer(0, 0, 0, 0);
                     l.setSingleLine(true); l.setEllipsize(android.text.TextUtils.TruncateAt.END);
                     r = tv(13, 0x80FFFFFF, "sans-serif"); r.setShadowLayer(0, 0, 0, 0);
-                    row.addView(l, new LinearLayout.LayoutParams(0, -2, 1f));
-                    row.addView(r, new LinearLayout.LayoutParams(-2, -2));
-                } else { l = (TextView) row.getChildAt(0); r = (TextView) row.getChildAt(1); }
+                    r.setSingleLine(true); r.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                    // 右边说明太长时站名不能被挤没：站名最多占一半宽，至少留 5 个字
+                    l.setMinWidth(dp(90)); l.setMaxWidth(dp(260));
+                    row.addView(l, new LinearLayout.LayoutParams(-2, -2));
+                    View sp = new View(PlayerActivity.this);
+                    row.addView(sp, new LinearLayout.LayoutParams(0, 1, 1f));
+                    LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(-2, -2); rp.leftMargin = dp(16);
+                    row.addView(r, rp);
+                } else { l = (TextView) row.getChildAt(0); r = (TextView) row.getChildAt(2); }
                 String left, right = "";
                 if (tab == 0) left = eps(si).optJSONObject(i).optString("name");
                 else if (i == 0) {

@@ -108,6 +108,7 @@ public class Net {
             String u = url;
             String seg = null, keyUri = null, ivHex = null;
             long seq = 0, segSeq = 0;
+            double segSec = 0, lastInf = 0; long bw = 0;
             for (int depth = 0; depth < 3 && seg == null; depth++) {
                 Res r = get(u, null, Math.max(2000, budgetMs), 2 * 1024 * 1024);
                 if (r.code >= 400) throw new Exception("http " + r.code);
@@ -135,6 +136,7 @@ public class Net {
                 int h = 0;
                 for (String line : body.split("\n")) {
                     line = line.trim();
+                    if (line.startsWith("#EXTINF:")) { try { lastInf = Double.parseDouble(line.substring(8).split(",")[0].trim()); } catch (Exception ignore) {} }
                     if (line.startsWith("#EXT-X-MEDIA-SEQUENCE:")) { try { seq = Long.parseLong(line.substring(22).trim()); } catch (Exception ignore) {} }
                     if (line.startsWith("#EXT-X-KEY")) {
                         keyUri = null; ivHex = null;
@@ -148,10 +150,13 @@ public class Net {
                     if (line.startsWith("#EXT-X-STREAM-INF")) {
                         java.util.regex.Matcher m = java.util.regex.Pattern.compile("RESOLUTION=\\d+x(\\d+)").matcher(line);
                         if (m.find()) h = Math.max(h, Integer.parseInt(m.group(1)));
+                        java.util.regex.Matcher bm = java.util.regex.Pattern.compile("[^-]BANDWIDTH=(\\d+)").matcher(line);
+                        if (bm.find()) bw = Math.max(bw, Long.parseLong(bm.group(1)));
                     }
                     if (line.length() == 0 || line.startsWith("#")) continue;
                     next = new URL(new URL(base), line).toString();
                     segSeq = seq;
+                    segSec = lastInf;
                     break;
                 }
                 if (h > 0) o.put("h", h);
@@ -164,6 +169,10 @@ public class Net {
             int left = (int) Math.max(1500, budgetMs - (t1 - t0));
             HttpURLConnection c = open(seg, null, left);
             if (c.getResponseCode() >= 400) throw new Exception("seg " + c.getResponseCode());
+            // 码率（字节/秒）：分片大小÷分片时长最准，没有就用主列表标的 BANDWIDTH；判断单路够不够播用
+            long clen = c.getContentLength();
+            if (clen > 65536 && segSec >= 1) o.put("br", (long) (clen / segSec));
+            else if (bw > 0) o.put("br", bw / 8);
             InputStream in = c.getInputStream();
             byte[] buf = new byte[32768];
             long got = 0, ts = System.currentTimeMillis();

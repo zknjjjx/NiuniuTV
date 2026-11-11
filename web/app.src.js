@@ -34,7 +34,8 @@ function srcTier(s) {
   if (b === 0) return 1;                 // 未测
   let r = h >= 1000 ? 3 : (h >= 700 || h === 0) ? 2 : 1;
   // 有 5 路预下载，1080 单路 0.2 MB/s 就排在 720 前；嫌连接多的域名只能单路，要 0.9 才行，否则排到 720 后
-  if (r === 3 && b < (isCrowd(s) ? 0.9 : 0.2) * MB) r = 1;
+  // 知道码率（br）时，单路速度够码率 1.5 倍就算流畅
+  if (r === 3 && b < (isCrowd(s) ? (s.br > 0 ? Math.max(0.2 * MB, s.br * 1.5) : 0.9 * MB) : 0.2 * MB)) r = 1;
   if (r === 2 && b < 0.15 * MB) r = 1;    // 720 有 5 路帮拉，单路 0.15 就够
   return r + 1;                          // 4=1080 3=720流畅 2=其余能通
 }
@@ -617,7 +618,7 @@ const PAGES = {
       while (st.probing < (MOB ? 3 : 6) && probeQ.length) {
         const s = probeQ.shift();
         st.probing++;
-        probe(s.eps[0].url).then(r => { s.bps = r.bps; s.h = r.h || 0; s.dur = r.dur || 0; }).then(() => { st.probing--; st.probed++; status(); pump(); });
+        probe(s.eps[0].url).then(r => { s.bps = r.bps; s.h = r.h || 0; s.dur = r.dur || 0; s.br = r.br || 0; }).then(() => { st.probing--; st.probed++; status(); pump(); });
       }
     };
     let epsShown = 0;
@@ -705,7 +706,7 @@ const PAGES = {
       closeLayer();
       const data = { key, title: meta.title, pic: meta.pic || it.pic, id: it.id || "", type: kind, year: meta.year || "", si: 0, ei, pos: pos || 0,
         want: wantDur(),
-        sources: list.map(s => ({ site: s.site, eps: s.eps, bps: s.bps == null ? 0 : s.bps, h: s.h || 0, dur: s.dur || 0 })) };
+        sources: list.map(s => ({ site: s.site, eps: s.eps, bps: s.bps == null ? 0 : s.bps, h: s.h || 0, dur: s.dur || 0, br: s.br || 0 })) };
       if (APP) NN.play(JSON.stringify(data)); else toast(`将播放「${list[0].site}」${list[0].eps[Math.min(ei, list[0].eps.length - 1)].name}`);
     }
     $("#bPlay")._ok = () => { const h = hist(); startPlay(h ? h.ei : 0, h ? h.pos : 0); };

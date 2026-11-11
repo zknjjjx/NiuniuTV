@@ -59,7 +59,7 @@ function srcTier(s) {
   if (b < 0) return 0;
   if (b === 0) return 1;
   let r = h >= 1e3 ? 3 : h >= 700 || h === 0 ? 2 : 1;
-  if (r === 3 && b < (isCrowd(s) ? 0.9 : 0.2) * MB) r = 1;
+  if (r === 3 && b < (isCrowd(s) ? s.br > 0 ? Math.max(0.2 * MB, s.br * 1.5) : 0.9 * MB : 0.2 * MB)) r = 1;
   if (r === 2 && b < 0.15 * MB) r = 1;
   return r + 1;
 }
@@ -967,6 +967,7 @@ const PAGES = {
             s.bps = r.bps;
             s.h = r.h || 0;
             s.dur = r.dur || 0;
+            s.br = r.br || 0;
           }).then(() => {
             st.probing--;
             st.probed++;
@@ -1096,7 +1097,7 @@ const PAGES = {
             ei,
             pos: pos || 0,
             want: wantDur(),
-            sources: list.map((s) => ({ site: s.site, eps: s.eps, bps: s.bps == null ? 0 : s.bps, h: s.h || 0, dur: s.dur || 0 }))
+            sources: list.map((s) => ({ site: s.site, eps: s.eps, bps: s.bps == null ? 0 : s.bps, h: s.h || 0, dur: s.dur || 0, br: s.br || 0 }))
           };
           if (APP) NN.play(JSON.stringify(data));
           else toast(`\u5C06\u64AD\u653E\u300C${list[0].site}\u300D${list[0].eps[Math.min(ei, list[0].eps.length - 1)].name}`);
