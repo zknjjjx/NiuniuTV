@@ -140,4 +140,19 @@ final class Vprobe {
         }
         return new int[]{w, h};
     }
+
+    /** mp4 的 mvhd：整片时长（秒）；没有返回 0 */
+    static long mp4Dur(byte[] d) {
+        if (d == null) return 0;
+        for (int i = 4; i + 40 < d.length; i++) {
+            if (d[i] != 'm' || d[i + 1] != 'v' || d[i + 2] != 'h' || d[i + 3] != 'd') continue;
+            int ver = d[i + 4] & 0xFF;
+            long ts, du;
+            if (ver == 1) { ts = u32(d, i + 24); du = (u32(d, i + 28) << 32) | u32(d, i + 32); }
+            else { ts = u32(d, i + 16); du = u32(d, i + 20); }
+            if (ts > 0 && du > 0) { long sec = du / ts; if (sec > 0 && sec < 86400) return sec; }
+        }
+        return 0;
+    }
+    private static long u32(byte[] d, int o) { return ((long) (d[o] & 0xFF) << 24) | ((d[o + 1] & 0xFF) << 16) | ((d[o + 2] & 0xFF) << 8) | (d[o + 3] & 0xFF); }
 }

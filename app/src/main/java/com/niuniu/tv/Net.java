@@ -124,6 +124,13 @@ public class Net {
                     int keep = AdFilter.lastRemoved;
                     try { body = AdFilter.filter(body, base); } catch (Throwable ignore) {}
                     AdFilter.lastRemoved = keep;
+                    // 整片时长：点播列表（有 ENDLIST）把每段 EXTINF 加起来，广告段已去掉
+                    if (body.contains("#EXT-X-ENDLIST")) {
+                        double sum = 0;
+                        java.util.regex.Matcher em = java.util.regex.Pattern.compile("#EXTINF:\\s*([0-9.]+)").matcher(body);
+                        while (em.find()) { try { sum += Double.parseDouble(em.group(1)); } catch (Exception ignore) {} }
+                        if (sum > 60) o.put("dur", (long) sum);
+                    }
                 }
                 int h = 0;
                 for (String line : body.split("\n")) {
@@ -161,7 +168,8 @@ public class Net {
             byte[] buf = new byte[32768];
             long got = 0, ts = System.currentTimeMillis();
             int n;
-            ByteArrayOutputStream head = o.has("h") ? null : new ByteArrayOutputStream();
+            boolean whole = seg.equals(u);   // 整个视频文件（mp4 直链），时长在 moov 里
+            ByteArrayOutputStream head = o.has("h") && !whole ? null : new ByteArrayOutputStream();
             while ((n = in.read(buf)) > 0) {
                 got += n;
                 if (head != null && head.size() < 262144) head.write(buf, 0, n);
@@ -173,7 +181,11 @@ public class Net {
             if (got < 4096) throw new Exception("tiny");
             o.put("bps", got * 1000 / dt);
             // 主列表没标分辨率：从分片开头的视频头（SPS）读，和播放器一样按 max(高, 宽×9/16) 记
-            if (head != null && !"?".equals(keyUri)) {
+            if (whole && head != null && !o.has("dur")) {
+                long dsec = Vprobe.mp4Dur(head.toByteArray());
+                if (dsec > 60) o.put("dur", dsec);
+            }
+            if (head != null && !o.has("h") && !"?".equals(keyUri)) {
                 try {
                     byte[] d = head.toByteArray();
                     if (keyUri != null) {
