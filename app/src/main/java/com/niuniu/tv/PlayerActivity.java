@@ -848,8 +848,8 @@ public class PlayerActivity extends Activity {
     private void showPanel(int which) {
         tab = which;
         if (!Ui.phone(this)) {   // 电视：选集窄栏；片源要放分辨率和速率，宽一些
-            panel.getLayoutParams().width = dp(which == 1 ? 560 : 400);
-            pbox.getLayoutParams().width = dp(which == 1 ? 440 : 280);
+            panel.getLayoutParams().width = dp(which == 1 ? 720 : 400);
+            pbox.getLayoutParams().width = dp(which == 1 ? 600 : 280);
             panel.requestLayout();
         }
         fillPanel();
@@ -985,6 +985,7 @@ public class PlayerActivity extends Activity {
                     left = s.optString("site");
                     JSONArray e = s.optJSONArray("eps");
                     String res = resName(s.optInt("h", 0)), dn = durName(s);
+                    if (crowdHost(s)) res = res.length() > 0 ? res + "  ·  限单路" : "限单路";
                     if (dn.length() > 0) res = res.length() > 0 ? res + "  ·  " + dn : dn;
                     right = (res.length() > 0 ? res + "  ·  " : "") + (bps > 0 ? String.format(java.util.Locale.US, "%.1f MB/s  ·  ", bps / 1048576.0) : bps < 0 ? "不通  ·  " : "")
                             + (e == null ? 0 : e.length()) + " 集";

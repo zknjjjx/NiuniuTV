@@ -355,8 +355,8 @@ public class Pre {
             if (++rejects < 2 || lanes <= 1) return;
             rejects = 0;
             lanes = lanes > 2 ? 2 : 1;
-            crowded = true;
-            markCrowd(url);
+            // 详情页预载时被拒不记（那时还有测速同时连这个站，多半是一时的），只有真正播放时被拒才记下这个域名
+            if (gated) { crowded = true; markCrowd(url); }
         }
 
         Seg seg(Uri u, long off, long len, long st, long en) {
