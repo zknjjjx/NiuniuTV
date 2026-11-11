@@ -979,7 +979,7 @@ public class PlayerActivity extends Activity {
                     left = s.optString("site");
                     JSONArray e = s.optJSONArray("eps");
                     String res = resName(s.optInt("h", 0));
-                    right = (res.length() > 0 ? res + "  ·  " : "") + (bps > 0 ? String.format(java.util.Locale.US, "%.1f MB/s  ·  ", bps / 1048576.0) : bps < 0 ? "不通  ·  " : "")
+                    right = (res.length() > 0 ? res + "  ·  " : "") + (bps > 0 ? String.format(java.util.Locale.US, "%.1f MB/s  ·  ", bps / 1048576.0) : bps < 0 ? "不通" + (s.optString("err").length() > 0 ? "（" + s.optString("err") + "）" : "") + "  ·  " : "")
                             + (e == null ? 0 : e.length()) + " 集";
                     if (i - 1 == si) right = (res.length() > 0 ? res + "  ·  " : "") + (bps > 0 ? String.format(java.util.Locale.US, "%.1f MB/s  ·  ", bps / 1048576.0) : "") + "正在播放" + (autoSrc ? "" : cachedText());
                 }

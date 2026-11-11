@@ -732,7 +732,7 @@ const PAGES = {
       while (st.probing < (MOB ? 3 : 6) && probeQ.length) {
         const s = probeQ.shift();
         st.probing++;
-        probe(s.eps[0].url).then(r => { s.bps = r.bps; s.h = r.h || 0; }).then(() => { st.probing--; st.probed++; status(); pump(); });
+        probe(s.eps[0].url).then(r => { s.bps = r.bps; s.h = r.h || 0; s.err = r.err || ""; }).then(() => { st.probing--; st.probed++; status(); pump(); });
       }
     };
     let epsShown = 0;
@@ -813,7 +813,7 @@ const PAGES = {
       const list = rank(ei);
       closeLayer();
       const data = { key, title: meta.title, pic: meta.pic || it.pic, id: it.id || "", type: kind, year: meta.year || "", si: 0, ei, pos: pos || 0,
-        sources: list.map(s => ({ site: s.site, eps: s.eps, bps: s.bps == null ? 0 : s.bps, h: s.h || 0 })) };
+        sources: list.map(s => ({ site: s.site, eps: s.eps, bps: s.bps == null ? 0 : s.bps, h: s.h || 0, err: s.err || "" })) };
       if (APP) NN.play(JSON.stringify(data)); else toast(`将播放「${list[0].site}」${list[0].eps[Math.min(ei, list[0].eps.length - 1)].name}`);
     }
     $("#bPlay")._ok = () => { const h = hist(); startPlay(h ? h.ei : 0, h ? h.pos : 0); };

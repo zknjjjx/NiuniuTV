@@ -1137,6 +1137,7 @@ const PAGES = {
           probe(s.eps[0].url).then((r) => {
             s.bps = r.bps;
             s.h = r.h || 0;
+            s.err = r.err || "";
           }).then(() => {
             st.probing--;
             st.probed++;
@@ -1254,7 +1255,7 @@ const PAGES = {
             si: 0,
             ei,
             pos: pos || 0,
-            sources: list.map((s) => ({ site: s.site, eps: s.eps, bps: s.bps == null ? 0 : s.bps, h: s.h || 0 }))
+            sources: list.map((s) => ({ site: s.site, eps: s.eps, bps: s.bps == null ? 0 : s.bps, h: s.h || 0, err: s.err || "" }))
           };
           if (APP) NN.play(JSON.stringify(data));
           else toast(`\u5C06\u64AD\u653E\u300C${list[0].site}\u300D${list[0].eps[Math.min(ei, list[0].eps.length - 1)].name}`);

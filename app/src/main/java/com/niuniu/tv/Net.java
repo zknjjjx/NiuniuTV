@@ -110,7 +110,7 @@ public class Net {
             String u = url;
             if (Box.isBox(u)) {   // 爬虫源：先向爬虫要真实地址
                 Box.Res br = Box.resolve(u, Math.max(3000, budgetMs));
-                if (br == null) throw new Exception("resolve");
+                if (br == null) throw new Exception(Box.errOf(u));
                 u = br.url;
                 o.put("ttfr", System.currentTimeMillis() - t0);
             }
@@ -193,7 +193,13 @@ public class Net {
                 } catch (Throwable ignore) {}
             }
         } catch (Exception e) {
-            try { o.put("bps", -1); o.put("err", e.getClass().getSimpleName()); } catch (Exception ignored) {}
+            String m = e.getMessage(), why;
+            if (e instanceof java.net.SocketTimeoutException) why = "超时";
+            else if (e instanceof java.net.UnknownHostException) why = "域名不通";
+            else if (m != null && m.startsWith("http ")) why = m.substring(5);
+            else if (m != null && m.length() > 0 && m.length() <= 16 && !(e instanceof java.io.IOException)) why = m;
+            else why = e.getClass().getSimpleName().replace("Exception", "");
+            try { o.put("bps", -1); o.put("err", why); } catch (Exception ignored) {}
         }
         return o;
     }

@@ -387,6 +387,9 @@ public class Box {
     private static final Map<String, Res> resolved = new ConcurrentHashMap<>();
     private static final Map<String, Map<String, String>> hostHeaders = new ConcurrentHashMap<>();
 
+    /** 上次把 box:// 换真实地址失败的原因（给测速显示） */
+    static String errOf(String boxUrl) { Res r = resolved.get(boxUrl); return r == null || r.err == null ? "爬虫超时" : r.err; }
+
     static boolean isBox(String u) { return u != null && u.startsWith("box://"); }
 
     static String boxUrl(String key, String flag, String id) {
@@ -412,14 +415,15 @@ public class Box {
             if (url.startsWith("proxy://")) url = url.replace("proxy://", "http://127.0.0.1:" + BoxServer.port + "/proxy?");
             if (!pre.isEmpty() && parse == 0 && jx == 0 && url.startsWith("http")) url = pre + url;
             else if ((parse == 1 || jx == 1) && url.startsWith("http")) {
+                r.err = "要解析";
                 // 官源：官网播放页 → 只用接口自己配置的 JSON 解析拿直链（App 不内置解析；网页解析/嗅探留到 3.1）
                 Res j = jsonJx(flag, url, Math.min(9000, Math.max(5000, timeoutMs)));
-                if (j == null) { r.err = jxs.isEmpty() ? "接口没配解析" : "解析失败"; resolved.put(boxUrl, r); return null; }
+                if (j == null) { r.err = jxs.isEmpty() ? "要解析·接口没配" : "解析失败"; resolved.put(boxUrl, r); return null; }
                 j.at = r.at; resolved.put(boxUrl, j);
                 String host = host(j.url); if (host != null && !j.headers.isEmpty()) hostHeaders.put(host, j.headers);
                 return j;
             }
-            if (!url.startsWith("http")) { r.err = "无地址"; resolved.put(boxUrl, r); return null; }
+            if (!url.startsWith("http")) { r.err = out.isEmpty() ? "爬虫超时" : url.isEmpty() ? "爬虫无地址" : "非直链 " + url.split(":")[0]; Log.w(TAG, "resolve " + key + " " + flag + " -> " + out.substring(0, Math.min(200, out.length()))); resolved.put(boxUrl, r); return null; }
             Object h = o.opt("header");
             if (h instanceof String && ((String) h).startsWith("{")) h = new JSONObject((String) h);
             if (h instanceof JSONObject) {
