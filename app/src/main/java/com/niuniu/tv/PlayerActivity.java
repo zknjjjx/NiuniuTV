@@ -118,6 +118,7 @@ public class PlayerActivity extends Activity {
         try {
             data = new JSONObject(getIntent().getStringExtra("data"));
             sources = data.getJSONArray("sources");
+            wantDur = data.optLong("want", 0);
             si = data.optInt("si", 0);
             ei = data.optInt("ei", 0);
             resumePos = data.optLong("pos", 0);
@@ -193,6 +194,9 @@ public class PlayerActivity extends Activity {
                 if (st == Player.STATE_READY) {
                     h.removeCallbacks(watchdog);
                     dropQuiet = android.os.SystemClock.uptimeMillis() + 3000;
+                    if (wantDur > 0 && player.getDuration() > 60000 && !player.isCurrentMediaItemLive()) {   // 电影：记下真实时长，换源列表里显示
+                        try { sources.optJSONObject(si).put("dur", player.getDuration() / 1000); } catch (Exception ignore) {}
+                    }
                     if (!started) {
                         started = true;
                         failed.clear();
@@ -603,9 +607,9 @@ public class PlayerActivity extends Activity {
             if (i == 0) t = "自动选择";
             else {
                 JSONObject o = sources.optJSONObject(i - 1);
-                String res = resName(o.optInt("h", 0));
+                String res = resName(o.optInt("h", 0)), dn = durName(o);
                 long bps = o.optLong("bps", 0);
-                t = o.optString("site") + (res.length() > 0 ? "  " + res : "")
+                t = o.optString("site") + (res.length() > 0 ? "  " + res : "") + (dn.length() > 0 ? "  " + dn : "")
                         + (bps > 0 ? String.format(java.util.Locale.US, "  %.1fM", bps / 1048576.0) : bps < 0 ? "  不通" : "");
             }
             srcRow.addView(chip(t));
@@ -901,6 +905,17 @@ public class PlayerActivity extends Activity {
 
     private boolean autoSrc = true;
 
+    /** 电影的豆瓣时长（秒），0＝不比；片源时长差太多（多半是同名的别的片子）排到最后 */
+    private static long wantDur;
+    static boolean durOff(JSONObject s) {
+        long d = s.optLong("dur", 0);
+        return wantDur > 0 && d > 0 && Math.abs(d - wantDur) > Math.max(600, wantDur * 0.12);
+    }
+    private static String durName(JSONObject s) {
+        long d = s.optLong("dur", 0);
+        if (d <= 0) return "";
+        return (d >= 3600 ? (d / 3600) + "小时" + (d % 3600 / 60) + "分" : (d / 60) + "分钟") + (durOff(s) ? "（时长不符）" : "");
+    }
     private static String resName(int hh) {
         if (hh >= 2000) return "4K";
         if (hh >= 1300) return "2K";
@@ -919,6 +934,7 @@ public class PlayerActivity extends Activity {
         int hh = s.optInt("h", 0); long b = s.optLong("bps", 0);
         if (b < 0) return 0;
         if (b == 0) return 1;
+        if (durOff(s)) return 1;
         int r = hh >= 1000 ? 3 : (hh >= 700 || hh == 0) ? 2 : 1;
         // 5 路预下载：1080 单路 0.2 MB/s 就够；嫌连接多的域名只能单路，要 0.9 才排在 720 前
         double need = r == 3 ? (crowdHost(s) ? 0.9 : 0.2) * 1048576 : r == 2 ? 0.15 * 1048576 : 0;
@@ -978,7 +994,8 @@ public class PlayerActivity extends Activity {
                     long bps = s.optLong("bps", 0);
                     left = s.optString("site");
                     JSONArray e = s.optJSONArray("eps");
-                    String res = resName(s.optInt("h", 0));
+                    String res = resName(s.optInt("h", 0)), dn = durName(s);
+                    if (dn.length() > 0) res = res.length() > 0 ? res + "  ·  " + dn : dn;
                     right = (res.length() > 0 ? res + "  ·  " : "") + (bps > 0 ? String.format(java.util.Locale.US, "%.1f MB/s  ·  ", bps / 1048576.0) : bps < 0 ? "不通" + (s.optString("err").length() > 0 ? "（" + s.optString("err") + "）" : "") + "  ·  " : "")
                             + (e == null ? 0 : e.length()) + " 集";
                     if (i - 1 == si) right = (res.length() > 0 ? res + "  ·  " : "") + (bps > 0 ? String.format(java.util.Locale.US, "%.1f MB/s  ·  ", bps / 1048576.0) : "") + "正在播放" + (autoSrc ? "" : cachedText());

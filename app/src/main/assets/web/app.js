@@ -1138,6 +1138,7 @@ const PAGES = {
             s.bps = r.bps;
             s.h = r.h || 0;
             s.err = r.err || "";
+            s.dur = r.dur || 0;
           }).then(() => {
             st.probing--;
             st.probed++;
@@ -1190,6 +1191,15 @@ const PAGES = {
           }
         });
       };
+      const wantDur = () => {
+        if (kind !== "movie") return 0;
+        const m = /(\d+)\s*分/.exec((meta.durations || [])[0] || "");
+        return m ? +m[1] * 60 : 0;
+      };
+      const durOff = (s) => {
+        const w = wantDur();
+        return !!(w && s.dur > 0 && Math.abs(s.dur - w) > Math.max(600, w * 0.12));
+      };
       function rank(ei) {
         const need = ei + 1, maxEp = Math.max.apply(null, st.srcs.map((s) => s.eps.length));
         const score = srcScore;
@@ -1197,6 +1207,8 @@ const PAGES = {
         return st.srcs.slice().sort((a, b) => {
           const ha = a.eps.length >= need ? 1 : 0, hb = b.eps.length >= need ? 1 : 0;
           if (ha !== hb) return hb - ha;
+          const oa = durOff(a) ? 1 : 0, ob = durOff(b) ? 1 : 0;
+          if (oa !== ob && a.bps >= 0 && b.bps >= 0) return oa - ob;
           if (kind === "tv" && maxEp > 1) {
             const fa = a.eps.length >= maxEp * 0.9 ? 1 : 0, fb = b.eps.length >= maxEp * 0.9 ? 1 : 0;
             if (fa !== fb && a.bps > 0 === b.bps > 0) return fb - fa;
@@ -1208,7 +1220,7 @@ const PAGES = {
         const t0 = Date.now();
         const pre = () => {
           if (tok !== routeTok) return;
-          const ok = st.srcs.filter((s2) => s2.bps > 0).length, waited = Date.now() - t0;
+          const ok = st.srcs.filter((s2) => s2.bps > 0 && !durOff(s2)).length, waited = Date.now() - t0;
           if (!(ok >= 3 || ok >= 1 && waited > 6e3 || ok >= 1 && st.done && st.probing === 0 && !probeQ.length)) {
             if (waited < 3e4) setTimeout(pre, 500);
             return;
@@ -1231,7 +1243,7 @@ const PAGES = {
           $("#pkC")._ok = closeLayer;
           const t0 = Date.now();
           while (!cancelled) {
-            const ok = st.srcs.filter((s) => s.bps > 0).length, el = $("#pk");
+            const ok = st.srcs.filter((s) => s.bps > 0 && !durOff(s)).length, el = $("#pk");
             if (el) el.textContent = `\u5DF2\u627E\u5230 ${st.srcs.length} \u4E2A\u7247\u6E90\uFF0C\u6D4B\u901F\u5B8C\u6210 ${st.probed} \u4E2A`;
             const waited = Date.now() - t0;
             if (ok >= 3 || ok >= 1 && waited > 2500 || ok >= 2 && waited > 1500 || st.done && st.probing === 0 && !probeQ.length || waited > 1e4) break;
@@ -1255,7 +1267,8 @@ const PAGES = {
             si: 0,
             ei,
             pos: pos || 0,
-            sources: list.map((s) => ({ site: s.site, eps: s.eps, bps: s.bps == null ? 0 : s.bps, h: s.h || 0, err: s.err || "" }))
+            want: wantDur(),
+            sources: list.map((s) => ({ site: s.site, eps: s.eps, bps: s.bps == null ? 0 : s.bps, h: s.h || 0, err: s.err || "", dur: s.dur || 0 }))
           };
           if (APP) NN.play(JSON.stringify(data));
           else toast(`\u5C06\u64AD\u653E\u300C${list[0].site}\u300D${list[0].eps[Math.min(ei, list[0].eps.length - 1)].name}`);
@@ -1340,25 +1353,30 @@ const PAGES = {
     const cidType = (c) => c === 1 ? "movie" : "tv";
     const iqSuggest = (v) => __async(this, null, function* () {
       const d = yield getJSON(`https://suggest.video.iqiyi.com/?if=mobile&key=${encodeURIComponent(v)}`, null, 6e3);
-      const TAGS = { "\u7535\u5F71": 1, "\u7535\u89C6\u5267": 2, "\u52A8\u6F2B": 4, "\u7EFC\u827A": 6 };
+      const TAGS = { "\u7535\u5F71": 1, "\u7535\u89C6\u5267": 2, "\u7EAA\u5F55\u7247": 3, "\u52A8\u6F2B": 4, "\u7EFC\u827A": 6 };
       const seen = {}, out = [];
       (d.data || []).forEach((x) => {
         if (!x.name) return;
         let cid = x.cid;
+        let yr = x.year || "";
         if (!cid) {
-          const t = ((x.presentation_element || {}).tags || []).map((g) => g.name).find((n) => TAGS[n]);
+          const pe = x.presentation_element || {};
+          const t = (pe.tags || []).map((g) => String(g.name || "").split("\xB7")[0]).find((n) => TAGS[n]);
           if (!t) return;
           cid = TAGS[t];
+          const ym = /^((?:19|20)\d\d)\//.exec(pe.show_reason || "");
+          yr = ym ? ym[1] : "";
+          if (!x.picture_url && pe.picture_url) x.picture_url = pe.picture_url;
         }
-        if ([1, 2, 4, 6].indexOf(cid) < 0) return;
+        if ([1, 2, 3, 4, 6].indexOf(cid) < 0) return;
         const k = x.name.replace(/\s+/g, "");
         if (seen[k]) {
           const o = seen[k];
           if (!o.pic && x.picture_url) o.pic = x.picture_url.replace(/^http:/, "https:");
           return;
         }
-        const cn = { 1: "\u7535\u5F71", 2: "\u7535\u89C6\u5267", 4: "\u52A8\u6F2B", 6: "\u7EFC\u827A" }[cid];
-        out.push(seen[k] = { id: "", title: x.name, pic: (x.picture_url || "").replace(/^http:/, "https:"), year: x.year || "", type: cidType(cid), sub: [x.cname || cn, x.year].filter(Boolean).join(" \xB7 ") });
+        const cn = { 1: "\u7535\u5F71", 2: "\u7535\u89C6\u5267", 3: "\u7EAA\u5F55\u7247", 4: "\u52A8\u6F2B", 6: "\u7EFC\u827A" }[cid];
+        out.push(seen[k] = { id: "", title: x.name, pic: (x.picture_url || "").replace(/^http:/, "https:"), year: yr, type: cidType(cid), sub: [x.cname || cn, yr].filter(Boolean).join(" \xB7 ") });
       });
       const items = out.slice(0, 18);
       const fill = items.filter((it) => !it.pic).slice(0, 8).map((it) => dbSearch(it.title).then((r) => {

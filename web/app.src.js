@@ -732,7 +732,7 @@ const PAGES = {
       while (st.probing < (MOB ? 3 : 6) && probeQ.length) {
         const s = probeQ.shift();
         st.probing++;
-        probe(s.eps[0].url).then(r => { s.bps = r.bps; s.h = r.h || 0; s.err = r.err || ""; }).then(() => { st.probing--; st.probed++; status(); pump(); });
+        probe(s.eps[0].url).then(r => { s.bps = r.bps; s.h = r.h || 0; s.err = r.err || ""; s.dur = r.dur || 0; }).then(() => { st.probing--; st.probed++; status(); pump(); });
       }
     };
     let epsShown = 0;
@@ -764,6 +764,9 @@ const PAGES = {
       resolving.done.then(() => { if (tok === routeTok) { st.done = true; status(); } });
     };
 
+    // 电影的豆瓣时长（秒）：「172分钟」「172分钟(中国大陆)」取第一个数
+    const wantDur = () => { if (kind !== "movie") return 0; const m = /(\d+)\s*分/.exec((meta.durations || [])[0] || ""); return m ? +m[1] * 60 : 0; };
+    const durOff = s => { const w = wantDur(); return !!(w && s.dur > 0 && Math.abs(s.dur - w) > Math.max(600, w * 0.12)); };
     // 片源排序（播放与详情页预载共用同一规则，保证预载的就是要播的那个源）
     function rank(ei) {
       const need = ei + 1, maxEp = Math.max.apply(null, st.srcs.map(s => s.eps.length));
@@ -772,6 +775,9 @@ const PAGES = {
       return st.srcs.slice().sort((a, b) => {
         const ha = a.eps.length >= need ? 1 : 0, hb = b.eps.length >= need ? 1 : 0;
         if (ha !== hb) return hb - ha;
+        // 电影：和豆瓣时长差太多的（多半是同名的另一部）排到能通的源后面
+        const oa = durOff(a) ? 1 : 0, ob = durOff(b) ? 1 : 0;
+        if (oa !== ob && a.bps >= 0 && b.bps >= 0) return oa - ob;
         if (kind === "tv" && maxEp > 1) { const fa = a.eps.length >= maxEp * 0.9 ? 1 : 0, fb = b.eps.length >= maxEp * 0.9 ? 1 : 0; if (fa !== fb && (a.bps > 0) === (b.bps > 0)) return fb - fa; }
         return score(b) - score(a);
       });
@@ -781,7 +787,7 @@ const PAGES = {
       const t0 = Date.now();
       const pre = () => {
         if (tok !== routeTok) return;
-        const ok = st.srcs.filter(s => s.bps > 0).length, waited = Date.now() - t0;
+        const ok = st.srcs.filter(s => s.bps > 0 && !durOff(s)).length, waited = Date.now() - t0;
         if (!(ok >= 3 || (ok >= 1 && waited > 6000) || (ok >= 1 && st.done && st.probing === 0 && !probeQ.length))) {
           if (waited < 30000) setTimeout(pre, 500);
           return;
@@ -802,7 +808,7 @@ const PAGES = {
       $("#pkC")._ok = closeLayer;
       const t0 = Date.now();
       while (!cancelled) {
-        const ok = st.srcs.filter(s => s.bps > 0).length, el = $("#pk");
+        const ok = st.srcs.filter(s => s.bps > 0 && !durOff(s)).length, el = $("#pk");
         if (el) el.textContent = `已找到 ${st.srcs.length} 个片源，测速完成 ${st.probed} 个`;
         const waited = Date.now() - t0;
         if (ok >= 3 || (ok >= 1 && waited > 2500) || (ok >= 2 && waited > 1500) || (st.done && st.probing === 0 && !probeQ.length) || waited > 10000) break;
@@ -813,7 +819,8 @@ const PAGES = {
       const list = rank(ei);
       closeLayer();
       const data = { key, title: meta.title, pic: meta.pic || it.pic, id: it.id || "", type: kind, year: meta.year || "", si: 0, ei, pos: pos || 0,
-        sources: list.map(s => ({ site: s.site, eps: s.eps, bps: s.bps == null ? 0 : s.bps, h: s.h || 0, err: s.err || "" })) };
+        want: wantDur(),
+        sources: list.map(s => ({ site: s.site, eps: s.eps, bps: s.bps == null ? 0 : s.bps, h: s.h || 0, err: s.err || "", dur: s.dur || 0 })) };
       if (APP) NN.play(JSON.stringify(data)); else toast(`将播放「${list[0].site}」${list[0].eps[Math.min(ei, list[0].eps.length - 1)].name}`);
     }
     $("#bPlay")._ok = () => { const h = hist(); startPlay(h ? h.ei : 0, h ? h.pos : 0); };
@@ -869,17 +876,24 @@ const PAGES = {
     const iqSuggest = async v => {
       const d = await getJSON(`https://suggest.video.iqiyi.com/?if=mobile&key=${encodeURIComponent(v)}`, null, 6000);
       // cid 0 是联想词条（首字母/全拼常命中这种，如 wdxdjsl→我的兄弟叫顺溜），没有海报，带「电视剧/电影」标签的也要
-      const TAGS = { "电影": 1, "电视剧": 2, "动漫": 4, "综艺": 6 };
+      // 标签可能带后缀，如「电影·预告」（ads→奥德赛），按前缀认
+      const TAGS = { "电影": 1, "电视剧": 2, "纪录片": 3, "动漫": 4, "综艺": 6 };
       const seen = {}, out = [];
       (d.data || []).forEach(x => {
         if (!x.name) return;
         let cid = x.cid;
-        if (!cid) { const t = ((x.presentation_element || {}).tags || []).map(g => g.name).find(n => TAGS[n]); if (!t) return; cid = TAGS[t]; }
-        if ([1, 2, 4, 6].indexOf(cid) < 0) return;
+        let yr = x.year || "";
+        if (!cid) {
+          const pe = x.presentation_element || {};
+          const t = (pe.tags || []).map(g => String(g.name || "").split("·")[0]).find(n => TAGS[n]); if (!t) return; cid = TAGS[t];
+          const ym = /^((?:19|20)\d\d)\//.exec(pe.show_reason || ""); yr = ym ? ym[1] : "";   // 联想词条的 year 常是假的 2010，以简介里的年份为准
+          if (!x.picture_url && pe.picture_url) x.picture_url = pe.picture_url;
+        }
+        if ([1, 2, 3, 4, 6].indexOf(cid) < 0) return;
         const k = x.name.replace(/\s+/g, "");
         if (seen[k]) { const o = seen[k]; if (!o.pic && x.picture_url) o.pic = x.picture_url.replace(/^http:/, "https:"); return; }
-        const cn = { 1: "电影", 2: "电视剧", 4: "动漫", 6: "综艺" }[cid];
-        out.push(seen[k] = { id: "", title: x.name, pic: (x.picture_url || "").replace(/^http:/, "https:"), year: x.year || "", type: cidType(cid), sub: [x.cname || cn, x.year].filter(Boolean).join(" · ") });
+        const cn = { 1: "电影", 2: "电视剧", 3: "纪录片", 4: "动漫", 6: "综艺" }[cid];
+        out.push(seen[k] = { id: "", title: x.name, pic: (x.picture_url || "").replace(/^http:/, "https:"), year: yr, type: cidType(cid), sub: [x.cname || cn, yr].filter(Boolean).join(" · ") });
       });
       const items = out.slice(0, 18);
       // 没海报的前 8 个去豆瓣按片名补海报和 id（最多等 3.5 秒）
