@@ -117,6 +117,7 @@ public class PlayerActivity extends Activity {
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         try {
             data = new JSONObject(getIntent().getStringExtra("data"));
+            current = new java.lang.ref.WeakReference<>(this);
             sources = data.getJSONArray("sources");
             wantDur = data.optLong("want", 0);
             si = data.optInt("si", 0);
@@ -787,38 +788,76 @@ public class PlayerActivity extends Activity {
     }
 
     // ---------------- 侧边选集 / 换源面板 ----------------
-    /** 起播时还没测完的源（速度一栏空着），播放稳了以后在后台接着测：两路并发，缓存够 30 秒才测，不和正片抢带宽 */
-    private volatile boolean probing;
+    /** 起播时还没测完的源和起播后才搜到的源，播放稳了以后在后台接着测：两路并发，缓存够 30 秒才测（最多等 2 分钟），不和正片抢带宽 */
+    private final java.util.concurrent.ConcurrentLinkedQueue<Integer> probeQ = new java.util.concurrent.ConcurrentLinkedQueue<>();
+    private volatile boolean probing, gone;
+    private final java.util.concurrent.atomic.AtomicInteger workers = new java.util.concurrent.atomic.AtomicInteger();
+    private static java.lang.ref.WeakReference<PlayerActivity> current;
     private void probeRest() {
         if (probing || sources == null) return;
-        final java.util.concurrent.ConcurrentLinkedQueue<Integer> q = new java.util.concurrent.ConcurrentLinkedQueue<>();
+        probing = true;
         for (int i = 0; i < sources.length(); i++) {
             JSONObject s = sources.optJSONObject(i);
-            if (s != null && s.optLong("bps", 0) == 0 && s.optJSONArray("eps") != null && s.optJSONArray("eps").length() > 0) q.add(i);
+            if (s != null && s.optLong("bps", 0) == 0 && s.optJSONArray("eps") != null && s.optJSONArray("eps").length() > 0) probeQ.add(i);
         }
-        if (q.isEmpty()) return;
-        probing = true;
-        for (int t = 0; t < 2; t++) new Thread(new Runnable() { public void run() {
-            Integer i;
-            while (probing && (i = q.poll()) != null) {
-                for (int w = 0; w < 120 && probing && !calm(); w++) { try { Thread.sleep(1000); } catch (InterruptedException e) { return; } }
-                if (!probing) return;
-                final int k = i;
-                String url;
-                try { url = sources.optJSONObject(k).getJSONArray("eps").getJSONObject(0).optString("url"); } catch (Exception e) { continue; }
-                final JSONObject o = Net.probe(url, 8000, 524288);
-                h.post(new Runnable() { public void run() {
-                    try {
-                        JSONObject s = sources.optJSONObject(k);
-                        s.put("bps", o.optLong("bps", 0));
-                        if (o.has("h")) s.put("h", o.optInt("h"));
-                        if (o.has("dur") && s.optLong("dur", 0) == 0) s.put("dur", o.optLong("dur"));
-                        if (o.has("br")) s.put("br", o.optLong("br"));
-                    } catch (Exception ignore) {}
-                    if (panelOn() && tab == 1 && padapter != null) padapter.notifyDataSetChanged();
-                }});
+        kickProbe();
+    }
+    private void kickProbe() {
+        while (probing && !gone && !probeQ.isEmpty() && workers.get() < 2) {
+            workers.incrementAndGet();
+            new Thread(new Runnable() { public void run() {
+                try {
+                    Integer i;
+                    while (!gone && (i = probeQ.poll()) != null) {
+                        for (int w = 0; w < 120 && !gone && !calm(); w++) { try { Thread.sleep(1000); } catch (InterruptedException e) { return; } }
+                        if (gone) return;
+                        final int k = i;
+                        String url;
+                        try { url = sources.optJSONObject(k).getJSONArray("eps").getJSONObject(0).optString("url"); } catch (Exception e) { continue; }
+                        final JSONObject o = Net.probe(url, 8000, 524288);
+                        h.post(new Runnable() { public void run() {
+                            try {
+                                JSONObject s = sources.optJSONObject(k);
+                                s.put("bps", o.optLong("bps", 0));
+                                if (o.has("h")) s.put("h", o.optInt("h"));
+                                if (o.has("dur") && s.optLong("dur", 0) == 0) s.put("dur", o.optLong("dur"));
+                                if (o.has("br")) s.put("br", o.optLong("br"));
+                            } catch (Exception ignore) {}
+                            refreshPanel();
+                        }});
+                    }
+                } finally { workers.decrementAndGet(); }
+            }}, "probe-rest").start();
+        }
+    }
+    /** 换源列表开着时刷新，保留遥控器当前停留的那一行 */
+    private void refreshPanel() {
+        if (!panelOn() || tab != 1) return;
+        int p = plist.getSelectedItemPosition();
+        fillPanel();
+        if (p >= 0) plist.setSelection(p);
+        plist.requestFocus();
+    }
+    /** 网页起播后新搜到的源：同一部片才收，同站同地址的不重复加 */
+    static void addSource(String key, String json) {
+        PlayerActivity a = current == null ? null : current.get();
+        if (a == null || a.gone || a.sources == null || a.data == null || !a.data.optString("key").equals(key)) return;
+        try {
+            JSONObject n = new JSONObject(json);
+            JSONArray ne = n.optJSONArray("eps");
+            if (ne == null || ne.length() == 0) return;
+            String u = ne.optJSONObject(0).optString("url");
+            for (int i = 0; i < a.sources.length(); i++) {
+                JSONObject s = a.sources.optJSONObject(i);
+                JSONArray e = s.optJSONArray("eps");
+                if (s.optString("site").equals(n.optString("site")) && e != null && e.length() > 0 && u.equals(e.optJSONObject(0).optString("url"))) return;
             }
-        }}, "probe-rest").start();
+            n.put("bps", 0);
+            a.sources.put(n);
+            a.probeQ.add(a.sources.length() - 1);
+            a.kickProbe();
+            a.refreshPanel();
+        } catch (Exception ignore) {}
     }
     /** 播放顺：已起播、缓存领先 30 秒以上 */
     private boolean calm() {
@@ -1277,7 +1316,8 @@ public class PlayerActivity extends Activity {
 
     @Override
     protected void onDestroy() {
-        probing = false;
+        gone = true;
+        if (current != null && current.get() == this) current = null;
         h.removeCallbacksAndMessages(null);
         if (panel != null) panel.animate().cancel();
         if (player != null) { player.release(); player = null; }

@@ -144,6 +144,7 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public void play(final String json) {
+            try { searching = new org.json.JSONObject(json).optBoolean("searching", false); } catch (Exception e) { searching = false; }
             runOnUiThread(new Runnable() {
                 public void run() {
                     Intent i = new Intent(MainActivity.this, PlayerActivity.class);
@@ -151,6 +152,19 @@ public class MainActivity extends Activity {
                     startActivity(i);
                 }
             });
+        }
+
+        /** 网页搜源结束：播放中就让网页停下来 */
+        @JavascriptInterface
+        public void searchDone() {
+            searching = false;
+            runOnUiThread(new Runnable() { public void run() { if (paused && web != null) web.pauseTimers(); } });
+        }
+
+        /** 起播后网页还在搜源：新找到的片源送给正在播的播放器，加进换源列表并在后台测速 */
+        @JavascriptInterface
+        public void addSrc(final String key, final String json) {
+            runOnUiThread(new Runnable() { public void run() { PlayerActivity.addSource(key, json); } });
         }
 
         /** 详情页测速定下片源后预载开头几分钟；地址变了就删旧缓存换新的 */
@@ -212,16 +226,23 @@ public class MainActivity extends Activity {
         public void exit() { runOnUiThread(new Runnable() { public void run() { finish(); } }); }
     }
 
+    private volatile boolean searching, paused;
     @Override
     protected void onPause() {
         super.onPause();
-        // 播放时让界面完全停下（动画、定时器），把性能全留给视频
-        if (web != null) { web.onPause(); web.pauseTimers(); }
+        paused = true;
+        // 播放时让界面完全停下（动画、定时器），把性能全留给视频；还在搜源就等搜完（最多 90 秒）再停
+        if (web != null) {
+            web.onPause();
+            if (!searching) web.pauseTimers();
+            else web.postDelayed(new Runnable() { public void run() { if (paused && web != null) { searching = false; web.pauseTimers(); } } }, 90000);
+        }
     }
 
     @Override
     protected void onResume() {
         super.onResume();
+        paused = false;
         if (web != null) { web.onResume(); web.resumeTimers(); }
         Upd.cleanup(this, false);  // 从安装界面回来（装好或取消）即删安装包
         if (web != null) web.evaluateJavascript("window.nnResume&&nnResume()", null);

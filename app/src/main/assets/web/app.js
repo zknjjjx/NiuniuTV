@@ -701,6 +701,10 @@ window.nnRemote = function(act, v) {
 };
 window.nnState = () => JSON.stringify({ n: SRC.list.length, from: SRC.from });
 window.nnResume = function() {
+  if (window.nnBackFromPlay) try {
+    window.nnBackFromPlay();
+  } catch (e) {
+  }
   if (!route) return;
   if (route.name === "home") refreshHistory();
   else if (route.name === "history") render("history");
@@ -960,7 +964,7 @@ const PAGES = {
       };
       const probeQ = [];
       const pump = () => {
-        while (st.probing < (MOB ? 3 : 6) && probeQ.length) {
+        while (!st.playing && st.probing < (MOB ? 3 : 6) && probeQ.length) {
           const s = probeQ.shift();
           st.probing++;
           probe(s.eps[0].url).then((r) => {
@@ -974,6 +978,12 @@ const PAGES = {
             status();
             pump();
           });
+        }
+      };
+      window.nnBackFromPlay = () => {
+        if (tok === routeTok && st.playing) {
+          st.playing = false;
+          pump();
         }
       };
       let epsShown = 0;
@@ -997,6 +1007,10 @@ const PAGES = {
         if (tok !== routeTok) return;
         st.srcs.push(s);
         probeQ.push(s);
+        if (APP && NN.addSrc && st.playing) try {
+          NN.addSrc(key, JSON.stringify({ site: s.site, eps: s.eps, bps: 0, h: 0, dur: 0, br: 0 }));
+        } catch (e) {
+        }
         pump();
         status();
         showEps();
@@ -1018,6 +1032,7 @@ const PAGES = {
             st.done = true;
             status();
           }
+          if (st.playing && APP && NN.searchDone) NN.searchDone();
         });
       };
       const wantDur = () => {
@@ -1097,10 +1112,13 @@ const PAGES = {
             ei,
             pos: pos || 0,
             want: wantDur(),
+            searching: !st.done,
             sources: list.map((s) => ({ site: s.site, eps: s.eps, bps: s.bps == null ? 0 : s.bps, h: s.h || 0, dur: s.dur || 0, br: s.br || 0 }))
           };
-          if (APP) NN.play(JSON.stringify(data));
-          else toast(`\u5C06\u64AD\u653E\u300C${list[0].site}\u300D${list[0].eps[Math.min(ei, list[0].eps.length - 1)].name}`);
+          if (APP) {
+            st.playing = true;
+            NN.play(JSON.stringify(data));
+          } else toast(`\u5C06\u64AD\u653E\u300C${list[0].site}\u300D${list[0].eps[Math.min(ei, list[0].eps.length - 1)].name}`);
         });
       }
       $("#bPlay")._ok = () => {

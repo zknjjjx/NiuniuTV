@@ -429,6 +429,7 @@ window.nnRemote = async function (act, v) {  // 手机/电脑通过局域网发�
 };
 window.nnState = () => JSON.stringify({ n: SRC.list.length, from: SRC.from });
 window.nnResume = function () {
+  if (window.nnBackFromPlay) try { window.nnBackFromPlay(); } catch (e) {}
   if (!route) return;
   if (route.name === "home") refreshHistory();
   else if (route.name === "history") render("history");
@@ -615,12 +616,14 @@ const PAGES = {
     // 后台测速：拿到片源就测，电视同时测 6 个、手机 3 个（原生层排队）
     const probeQ = [];
     const pump = () => {
-      while (st.probing < (MOB ? 3 : 6) && probeQ.length) {
+      while (!st.playing && st.probing < (MOB ? 3 : 6) && probeQ.length) {   // 开播后不在这里测，交给播放器在后台测
         const s = probeQ.shift();
         st.probing++;
         probe(s.eps[0].url).then(r => { s.bps = r.bps; s.h = r.h || 0; s.dur = r.dur || 0; s.br = r.br || 0; }).then(() => { st.probing--; st.probed++; status(); pump(); });
       }
     };
+    // 从播放器回来：恢复网页这边的测速
+    window.nnBackFromPlay = () => { if (tok === routeTok && st.playing) { st.playing = false; pump(); } };
     let epsShown = 0;
     const showEps = () => {
       const best = st.srcs.slice().sort((a, b) => b.eps.length - a.eps.length)[0];
@@ -640,6 +643,8 @@ const PAGES = {
       if (tok !== routeTok) return;
       st.srcs.push(s);
       probeQ.push(s);
+      // 已经开播了：新找到的源送给播放器，加进换源列表（播放器自己在后台测速）
+      if (APP && NN.addSrc && st.playing) try { NN.addSrc(key, JSON.stringify({ site: s.site, eps: s.eps, bps: 0, h: 0, dur: 0, br: 0 })); } catch (e) {}
       pump();
       status();
       showEps();
@@ -647,7 +652,7 @@ const PAGES = {
     const startResolve = () => {
       if (!SRC.list.length) { st.done = true; status(); return; }
       resolving = resolve(meta.title, meta.year, found, () => { if (tok === routeTok) { st.cam++; status(); } });
-      resolving.done.then(() => { if (tok === routeTok) { st.done = true; status(); } });
+      resolving.done.then(() => { if (tok === routeTok) { st.done = true; status(); } if (st.playing && APP && NN.searchDone) NN.searchDone(); });
     };
 
     // 电影的豆瓣时长（秒）：「172分钟」「172分钟(中国大陆)」取第一个数
@@ -705,9 +710,9 @@ const PAGES = {
       const list = rank(ei);
       closeLayer();
       const data = { key, title: meta.title, pic: meta.pic || it.pic, id: it.id || "", type: kind, year: meta.year || "", si: 0, ei, pos: pos || 0,
-        want: wantDur(),
+        want: wantDur(), searching: !st.done,
         sources: list.map(s => ({ site: s.site, eps: s.eps, bps: s.bps == null ? 0 : s.bps, h: s.h || 0, dur: s.dur || 0, br: s.br || 0 })) };
-      if (APP) NN.play(JSON.stringify(data)); else toast(`将播放「${list[0].site}」${list[0].eps[Math.min(ei, list[0].eps.length - 1)].name}`);
+      if (APP) { st.playing = true; NN.play(JSON.stringify(data)); } else toast(`将播放「${list[0].site}」${list[0].eps[Math.min(ei, list[0].eps.length - 1)].name}`);
     }
     $("#bPlay")._ok = () => { const h = hist(); startPlay(h ? h.ei : 0, h ? h.pos : 0); };
     $("#bIntro")._ok = () => openLayer(`<div class="panel"><h2>${esc(meta.title)}</h2><p>${esc(meta.intro || "暂无简介")}</p><div class="acts" style="margin-top:1.6rem"><div class="btn f" id="iClose">关闭</div></div></div>`, "#iClose");
