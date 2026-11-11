@@ -1,13 +1,13 @@
-name: 妞妞影视 3（测试版）
+name: 妞妞影视 4（测试版）
 on:
   push:
-    branches: [v3]
+    branches: [v4]
     paths-ignore: ["win/**", ".github/workflows/win.yml"]
   workflow_dispatch:
 permissions:
   contents: write
 concurrency:
-  group: nn-v3
+  group: nn-v4
   cancel-in-progress: true
 jobs:
   apk:
@@ -42,19 +42,19 @@ jobs:
         with: { name: apk, path: out/*.apk }
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name: v3-beta
-          name: 妞妞影视 3（测试版）
+          tag_name: v4-beta
+          name: 妞妞影视 4（测试版）
           prerelease: true
           make_latest: false
           files: |
             out/*.apk
             out/latest.json
             out/latest-m.json
-          body: 3.0 测试版：接入 TVBox 接口，jar / JS / Python 爬虫源和采集站一起搜索、测速、自动换源。3.1.3 起用单独包名「妞妞测试版」，和正式版同时安装、互不覆盖；之前装过 3.1.2 及以下的，要先卸载那个才能装 2.x 正式版。
+          body: 4.0 测试版（桌面名「妞妞测试版」，单独包名，和正式版同时安装、互不覆盖）：接入 TVBox 接口，jar / JS / Python 爬虫源和采集站一起搜索、测速、自动换源。
       - name: 删除旧测试包
         env: { GH_TOKEN: "${{ github.token }}" }
         run: |
           keep=" $(cd out && echo *.apk) latest.json latest-m.json "
-          gh api repos/${{ github.repository }}/releases/tags/v3-beta --jq '.assets[] | "\(.id) \(.name)"' | while read id name; do
+          gh api repos/${{ github.repository }}/releases/tags/v4-beta --jq '.assets[] | "\(.id) \(.name)"' | while read id name; do
             case "$keep" in *" $name "*) ;; *) echo "删除 $name"; gh api -X DELETE repos/${{ github.repository }}/releases/assets/$id ;; esac
           done
