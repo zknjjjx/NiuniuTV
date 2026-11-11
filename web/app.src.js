@@ -278,11 +278,13 @@ const CAM = /枪版|槍版|抢先|搶先|抢鲜|尝鲜版|偷拍|(^|[^a-z])(hd)?
 // 只看电影（≤3 集）：剧集、综艺的「抢先版」是会员提前看，画质正常
 const isCam = (v, eps) => eps.length <= 3 && ([v.vod_remarks, v.vod_version, v.vod_play_note].some(x => x && CAM.test(String(x))) || eps.some(e => CAM.test(e.name)));
 /* 在所有采集站里按片名找片源，找到一个回调一个 */
+const CMS_OFF = true;
 function resolve(name, year, onFound, onCam) {
   const want = canon(name);
   let alive = true, idx = 0, running = 0;
   const have = {}; SRC.list.forEach(s => { have[s.api] = 1; });
-  const sites = SRC.list.concat(BOX.cms.filter(s => !have[s.api]));
+  // 3.0.7 测试：采集站（含接口里的采集站）全停，只搜爬虫源，方便验证爬虫是否有效
+  const sites = CMS_OFF ? [] : SRC.list.concat(BOX.cms.filter(s => !have[s.api]));
   // 爬虫源：等接口加载好再搜，同时 BOXPAR 个，每个最多等 9 秒
   const boxDone = APP && NN.boxSearch ? (BOX.ready || Promise.resolve(BOX)).then(() => new Promise(done => {
     const list = BOX.sites.slice(); let bi = 0, br = 0;
@@ -966,7 +968,7 @@ const PAGES = {
     let lan = null; try { lan = APP && NN.lan ? JSON.parse(NN.lan()) : null; } catch (e) {}
     $("#page").innerHTML = `${lan && lan.url ? `<div class="lan"><b>手机 / 电脑扫码设置</b><img src="${lan.qr}"><div class="u">${esc(lan.url)}</div><small>同一局域网内用浏览器打开<br>可推送安装/升级 App、改片源、推送搜索</small></div>` : `<div class="lan"><b>局域网设置</b><small>没连上局域网，暂不可用</small></div>`}
       <div class="scroll setwrap" data-pad="6"><div class="pagehead sec"><h2>设置</h2><span>版本 ${APP ? esc(NN.version()) : "dev"}</span></div>
-      <div class="setrow f" id="sRefresh"><span>刷新片源</span><small>${SRC.list.length} 个采集站 · ${esc(SRC.from.replace(/^https?:\/\//, "").slice(0, 60))}</small></div>
+      <div class="setrow f" id="sRefresh"><span>刷新片源</span><small>${CMS_OFF ? "测试版已停用采集站 · " : ""}${SRC.list.length} 个采集站 · ${esc(SRC.from.replace(/^https?:\/\//, "").slice(0, 60))}</small></div>
       <div class="setrow f" id="sUrl"><span>片源地址</span><small>${esc(custom || "默认：zknjjjx/tvbox 的 cmstv.json（自动加速）")}</small></div>
       <div class="setrow f" id="sReset"><span>恢复默认片源</span><small>清掉自定义地址</small></div>
       <div class="setrow f" id="sBox"><span>TVBox 接口</span><small id="sBoxS">${esc(boxLabel())}</small></div>

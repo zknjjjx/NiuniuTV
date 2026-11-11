@@ -458,6 +458,7 @@ function parseEpisodes(v) {
 }
 const CAM = /枪版|槍版|抢先|搶先|抢鲜|尝鲜版|偷拍|(^|[^a-z])(hd)?(tc|ts|cam|hdcam|telesync|telecine)([^a-z]|$)/i;
 const isCam = (v, eps) => eps.length <= 3 && ([v.vod_remarks, v.vod_version, v.vod_play_note].some((x) => x && CAM.test(String(x))) || eps.some((e) => CAM.test(e.name)));
+const CMS_OFF = true;
 function resolve(name, year, onFound, onCam) {
   const want = canon(name);
   let alive = true, idx = 0, running = 0;
@@ -465,7 +466,7 @@ function resolve(name, year, onFound, onCam) {
   SRC.list.forEach((s) => {
     have[s.api] = 1;
   });
-  const sites = SRC.list.concat(BOX.cms.filter((s) => !have[s.api]));
+  const sites = CMS_OFF ? [] : SRC.list.concat(BOX.cms.filter((s) => !have[s.api]));
   const boxDone = APP && NN.boxSearch ? (BOX.ready || Promise.resolve(BOX)).then(() => new Promise((done) => {
     const list = BOX.sites.slice();
     let bi = 0, br = 0;
@@ -1508,7 +1509,7 @@ const PAGES = {
       }
       $("#page").innerHTML = `${lan && lan.url ? `<div class="lan"><b>\u624B\u673A / \u7535\u8111\u626B\u7801\u8BBE\u7F6E</b><img src="${lan.qr}"><div class="u">${esc(lan.url)}</div><small>\u540C\u4E00\u5C40\u57DF\u7F51\u5185\u7528\u6D4F\u89C8\u5668\u6253\u5F00<br>\u53EF\u63A8\u9001\u5B89\u88C5/\u5347\u7EA7 App\u3001\u6539\u7247\u6E90\u3001\u63A8\u9001\u641C\u7D22</small></div>` : `<div class="lan"><b>\u5C40\u57DF\u7F51\u8BBE\u7F6E</b><small>\u6CA1\u8FDE\u4E0A\u5C40\u57DF\u7F51\uFF0C\u6682\u4E0D\u53EF\u7528</small></div>`}
       <div class="scroll setwrap" data-pad="6"><div class="pagehead sec"><h2>\u8BBE\u7F6E</h2><span>\u7248\u672C ${APP ? esc(NN.version()) : "dev"}</span></div>
-      <div class="setrow f" id="sRefresh"><span>\u5237\u65B0\u7247\u6E90</span><small>${SRC.list.length} \u4E2A\u91C7\u96C6\u7AD9 \xB7 ${esc(SRC.from.replace(/^https?:\/\//, "").slice(0, 60))}</small></div>
+      <div class="setrow f" id="sRefresh"><span>\u5237\u65B0\u7247\u6E90</span><small>${CMS_OFF ? "\u6D4B\u8BD5\u7248\u5DF2\u505C\u7528\u91C7\u96C6\u7AD9 \xB7 " : ""}${SRC.list.length} \u4E2A\u91C7\u96C6\u7AD9 \xB7 ${esc(SRC.from.replace(/^https?:\/\//, "").slice(0, 60))}</small></div>
       <div class="setrow f" id="sUrl"><span>\u7247\u6E90\u5730\u5740</span><small>${esc(custom || "\u9ED8\u8BA4\uFF1Azknjjjx/tvbox \u7684 cmstv.json\uFF08\u81EA\u52A8\u52A0\u901F\uFF09")}</small></div>
       <div class="setrow f" id="sReset"><span>\u6062\u590D\u9ED8\u8BA4\u7247\u6E90</span><small>\u6E05\u6389\u81EA\u5B9A\u4E49\u5730\u5740</small></div>
       <div class="setrow f" id="sBox"><span>TVBox \u63A5\u53E3</span><small id="sBoxS">${esc(boxLabel())}</small></div>
