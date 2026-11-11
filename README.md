@@ -10,7 +10,9 @@
 
 - 安卓手机：https://github.com/zknjjjx/NiuniuTV/releases/download/v2-latest/NiuniuPhone.apk
 - 电视 / 盒子：https://github.com/zknjjjx/NiuniuTV/releases/download/v2-latest/NiuniuTV.apk
-- 国内打不开 GitHub 时，在链接前加 `https://gh-proxy.com/`
+- 国内加速（手机）：https://gh-proxy.com/https://github.com/zknjjjx/NiuniuTV/releases/download/v2-latest/NiuniuPhone.apk
+- 国内加速（电视）：https://gh-proxy.com/https://github.com/zknjjjx/NiuniuTV/releases/download/v2-latest/NiuniuTV.apk
+- 备用加速：把上面的 `gh-proxy.com` 换成 `ghfast.top`
 
 安装包约 5.4 MB。提示「解析包错误」多半是文件没下完整或链接已失效（带版本号的旧链接发新版后会失效）：用上面的固定链接重新下载，并用系统浏览器下载，不要在微信、QQ 里直接打开。
 
