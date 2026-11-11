@@ -48,6 +48,8 @@ jobs:
               json.dump({"version": v, "code": c, "apk": apk, "notes": msg}, open("out/" + js, "w"), ensure_ascii=False)
               print(open("out/" + js).read())
           PY
+      - name: 固定文件名（分享出去的链接不随版本失效）
+        run: cp out/NiuniuTV-*.apk out/NiuniuTV.apk && cp out/NiuniuPhone-*.apk out/NiuniuPhone.apk && ls -la out
       - uses: actions/upload-artifact@v4
         with: { name: apk, path: out/*.apk }
       - uses: softprops/action-gh-release@v2

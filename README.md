@@ -6,6 +6,14 @@
 - 原生：`app/src/main/java/com/niuniu/tv/`（WebView 外壳、跨域请求、测速、Media3 播放器）
 - 构建：推送 `v2` 分支自动出 APK，见 Releases 的 `v2-latest`
 
+## 下载（正式版，链接固定，永远是最新版）
+
+- 安卓手机：https://github.com/zknjjjx/NiuniuTV/releases/download/v2-latest/NiuniuPhone.apk
+- 电视 / 盒子：https://github.com/zknjjjx/NiuniuTV/releases/download/v2-latest/NiuniuTV.apk
+- 国内打不开 GitHub 时，在链接前加 `https://gh-proxy.com/`
+
+安装包约 5.4 MB。提示「解析包错误」多半是文件没下完整或链接已失效（带版本号的旧链接发新版后会失效）：用上面的固定链接重新下载，并用系统浏览器下载，不要在微信、QQ 里直接打开。
+
 ## 设备要求（正式版 2.9.x，电视版与手机版相同）
 
 | 项目 | 要求 |
