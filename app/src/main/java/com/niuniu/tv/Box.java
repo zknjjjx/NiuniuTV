@@ -47,9 +47,9 @@ public class Box {
     static final String UA = "okhttp/3.15";
     /** 网盘、扫码、登录、推送、直播、听书、音乐等：老人用不了或不是影视，直接不要 */
     /** 站名：只认明确的非影视词，不用「云」「球」「舞」「弹幕」这类会误伤的单字 */
-    static final Pattern SKIP = Pattern.compile("网盘|云盘|阿里|夸克|天翼|迅雷|百度|PikPak|pikpak|Alist|alist|AList|扫码|登录|推送|直播|虎牙|斗鱼|听书|评书|有声|音乐|歌曲|演唱会|MV|KTV|ktv|舞曲|跳舞|戏曲|相声|广播|电台|体育|看球|配置|设置|公告|说明|DIY|diy|Emby|emby|WebDAV|webdav|哔哩|哔哔|B站|YouTube|Youtube|油管|教育|课堂|小学|初中|高中|少儿|儿歌|启蒙|漫画|小说|磁力|种子|网红|急救|壁纸|本地|商店|市场|JustLive|盘搜|四盘|易搜|DJ|BT");
+    static final Pattern SKIP = Pattern.compile("网盘|云盘|阿里|夸克|天翼|迅雷|百度|PikPak|pikpak|Alist|alist|AList|扫码|登录|推送|直播|虎牙|斗鱼|听书|评书|有声|音乐|歌曲|演唱会|MV|KTV|ktv|舞曲|跳舞|戏曲|相声|广播|电台|体育|看球|配置|设置|公告|说明|DIY|diy|Emby|emby|WebDAV|webdav|哔哩|哔哔|B站|YouTube|Youtube|油管|教育|课堂|小学|初中|高中|少儿|儿歌|启蒙|漫画|小说|磁力|种子|网红|急救|壁纸|本地|商店|市场|JustLive|盘搜|四盘|易搜|搜搜|米盘|趣盘|玩偶|木偶|蜡笔|虎斑|双星|P2P|p2p|DJ|BT");
     /** 爬虫类名/脚本地址：网盘、分享、搜盘、直播、B站、推送、配置等类 */
-    static final Pattern SKIP_API = Pattern.compile("(?i)pan|share|aliyun|alips|quark|thunder|xunlei|p115|ucshare|pikpak|alist|webdav|samba|wogg|wobg|wo4k|wexwo|upyun|yiso|csp_jso|jiansou|tgyun|seedhub|s_zps|fishps|yisou|hdh\\b|tzfile|xiaozhang|fourkhdr|bili|kanqiu|live|push|config|market|localfile|csp_local|music|kugou|kuwo|djuu|firstaid|wallpaper|sport|(?-i:TY(Guard)?$)");
+    static final Pattern SKIP_API = Pattern.compile("(?i)pan|share|aliyun|alips|quark|thunder|xunlei|p115|ucshare|pikpak|alist|webdav|samba|wogg|wobg|wo4k|wexwo|upyun|yiso|csp_jso|jiansou|tgyun|seedhub|s_zps|fishps|yisou|hdh\\b|tzfile|xiaozhang|fourkhdr|bili|kanqiu|live|push|config|market|localfile|csp_local|music|kugou|kuwo|djuu|firstaid|wallpaper|sport|uuss|kkss|mipanso|duopan|pancms|fishcloud|shuangxing|kongbai|funletu|wexnullname|wexduoduo|wexmuou|wexshuangzi|wexhuban|wexbaiduso|wextyso|wexhaiyin|wexjianpian|jianpian|sixv|xb6v|new6v|(?-i:TY(Guard)?$)");
     static final Pattern ADULT = Pattern.compile("成人|福利|伦理|色|情色|AV|av|里番|写真|18\\+|🔞");
 
     static class Site { String key, name, api, ext, jar; int type; }
@@ -417,8 +417,16 @@ public class Box {
             else if ((parse == 1 || jx == 1) && url.startsWith("http")) {
                 r.err = "要解析";
                 // 官源：官网播放页 → 只用接口自己配置的 JSON 解析拿直链（App 不内置解析；网页解析/嗅探留到 3.1）
-                Res j = jsonJx(flag, url, Math.min(9000, Math.max(5000, timeoutMs)));
-                if (j == null) { r.err = jxs.isEmpty() ? "要解析·接口没配" : "解析失败"; resolved.put(boxUrl, r); return null; }
+                Res j = jxs.isEmpty() ? null : jsonJx(flag, url, Math.min(9000, Math.max(5000, timeoutMs)));
+                if (j == null) {   // 接口没配解析或解析失败：用隐藏网页嗅探播放页里的视频地址
+                    Map<String, String> sh = new HashMap<>();
+                    Object h0 = o.opt("header");
+                    try { if (h0 instanceof String && ((String) h0).startsWith("{")) h0 = new JSONObject((String) h0); } catch (Exception ignore) {}
+                    if (h0 instanceof JSONObject) { Iterator<String> it = ((JSONObject) h0).keys(); while (it.hasNext()) { String k = it.next(); sh.put(k, ((JSONObject) h0).optString(k)); } }
+                    Sniff.Hit sn = Sniff.run(app, pre.isEmpty() ? url : pre + url, sh, Math.max(12000, timeoutMs));
+                    if (sn != null) { j = new Res(); j.url = sn.url; j.headers.putAll(sn.headers); }
+                }
+                if (j == null) { r.err = jxs.isEmpty() ? "嗅探失败" : "解析和嗅探都失败"; resolved.put(boxUrl, r); return null; }
                 j.at = r.at; resolved.put(boxUrl, j);
                 String host = host(j.url); if (host != null && !j.headers.isEmpty()) hostHeaders.put(host, j.headers);
                 return j;

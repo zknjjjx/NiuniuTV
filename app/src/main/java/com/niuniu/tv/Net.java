@@ -109,7 +109,7 @@ public class Net {
         try {
             String u = url;
             if (Box.isBox(u)) {   // 爬虫源：先向爬虫要真实地址
-                Box.Res br = Box.resolve(u, Math.max(3000, budgetMs));
+                Box.Res br = Box.resolve(u, Math.max(10000, budgetMs));
                 if (br == null) throw new Exception(Box.errOf(u));
                 u = br.url;
                 o.put("ttfr", System.currentTimeMillis() - t0);

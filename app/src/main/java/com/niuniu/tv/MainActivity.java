@@ -43,6 +43,10 @@ public class MainActivity extends Activity {
         Net.init();
         Box.init(this);
         BoxServer.start();
+        final String exitWhy = com.github.tvbox.osc.base.App.getInstance().lastExit();
+        if (exitWhy != null) new android.os.Handler().postDelayed(new Runnable() { public void run() {
+            Toast.makeText(MainActivity.this, "上次意外退出：" + (exitWhy.length() > 60 ? exitWhy.substring(0, 60) : exitWhy), Toast.LENGTH_LONG).show();
+        } }, 2500);
         new Thread(new Runnable() { public void run() { Pre.cache(MainActivity.this); } }).start();   // 每次开 App 清空播放缓存
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         web = new WebView(this);

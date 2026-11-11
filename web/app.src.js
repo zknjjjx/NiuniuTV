@@ -211,8 +211,8 @@ function boxLoad(force) {
   })();
   return BOX.ready;
 }
-const PANFLAG = /夸克|阿里|UC|百度|115|天翼|迅雷|磁力|网盘|云盘|quark|ali|pan|baidu|xunlei|magnet/i;
-const PANID = /^(magnet:|ed2k:|thunder:)|pan\.|quark\.cn|aliyundrive|alipan|115\.com|123pan|cloud\.189|pan\.baidu|drive\.uc/i;
+const PANFLAG = /夸克|阿里|UC|百度|115|天翼|迅雷|XL|磁力|网盘|云盘|p2p|quark|ali|pan|baidu|xunlei|thunder|magnet/i;
+const PANID = /^(magnet:|ed2k:|thunder:|tvbox-xg:|xg:|ftp:)|pan\.|quark\.cn|aliyundrive|alipan|115\.com|123pan|cloud\.189|pan\.baidu|drive\.uc/i;
 /* 在一个爬虫源里搜片名 → 取详情 → 每条线路（最多 3 条）当一个片源 */
 async function boxOne(site, name, year, want, onFound, onCam, alive) {
   const t0 = Date.now();
