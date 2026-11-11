@@ -1646,7 +1646,7 @@ function boxLabel() {
   if (BOX.using && BOX.using !== (sel === "custom" ? "\u81EA\u5B9A\u4E49" : sel)) nm += ` \u6253\u4E0D\u5F00\uFF0C\u6682\u7528 ${BOX.using}`;
   return `${nm} \xB7 ${BOX.state || "\u672A\u52A0\u8F7D"}${BOX.sites.length ? "\uFF08" + ["jar", "js", "py"].map((k) => [k, BOX.sites.filter((s) => s.kind === k).length]).filter((x) => x[1]).map((x) => `${x[0] === "jar" ? "Java" : x[0] === "js" ? "JS" : "Python"} ${x[1]}`).join("\u3001") + "\uFF09" : ""}`;
 }
-const REL = "https://github.com/zknjjjx/NiuniuTV/releases/download/v2-latest/";
+const REL = "https://github.com/zknjjjx/NiuniuTV/releases/download/v3-beta/";
 const UPD_JSON = MOB ? "latest-m.json" : "latest.json";
 const relMirrors = (f) => [`https://gh-proxy.com/${REL}${f}`, `https://9797.cc.cd/${REL}${f}`, `https://ghfast.top/${REL}${f}`, REL + f];
 const verNum = (v) => String(v || "0").split(".").reduce((a, x) => a * 1e3 + (parseInt(x, 10) || 0), 0);

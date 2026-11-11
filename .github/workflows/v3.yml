@@ -25,6 +25,19 @@ jobs:
         run: curl -fsSL --retry 3 https://raw.githubusercontent.com/zknjjjx/tvbox/main/cmstv.json -o /tmp/s.json && python3 -c "import json;json.load(open('/tmp/s.json'))" && cp /tmp/s.json app/src/main/assets/web/sources.json || true
       - run: gradle assembleRelease --no-daemon --stacktrace
       - run: mkdir out && cp app/build/outputs/apk/*/release/*.apk out/ && ls -la out
+      - name: 生成升级信息 latest.json
+        run: |
+          python3 - <<'PY'
+          import json, re, glob, os, subprocess
+          g = open("app/build.gradle").read()
+          v = re.search(r"versionName '([^']+)'", g).group(1)
+          c = int(re.search(r"versionCode (\d+)", g).group(1))
+          msg = subprocess.check_output(["git", "log", "-1", "--pretty=%s"]).decode().strip()
+          for pre, js in (("NiuniuTV", "latest.json"), ("NiuniuPhone", "latest-m.json")):
+              apk = os.path.basename(glob.glob(f"out/{pre}-*.apk")[0])
+              json.dump({"version": v, "code": c, "apk": apk, "notes": msg}, open("out/" + js, "w"), ensure_ascii=False)
+              print(open("out/" + js).read())
+          PY
       - uses: actions/upload-artifact@v4
         with: { name: apk, path: out/*.apk }
       - uses: softprops/action-gh-release@v2
@@ -33,12 +46,15 @@ jobs:
           name: 妞妞影视 3（测试版）
           prerelease: true
           make_latest: false
-          files: out/*.apk
-          body: 3.0 测试版：接入 TVBox 接口，jar / JS / Python 爬虫源和采集站一起搜索、测速、自动换源。可直接覆盖安装 2.x。
+          files: |
+            out/*.apk
+            out/latest.json
+            out/latest-m.json
+          body: 3.0 测试版：接入 TVBox 接口，jar / JS / Python 爬虫源和采集站一起搜索、测速、自动换源。3.1.3 起用单独包名「妞妞测试版」，和正式版同时安装、互不覆盖；之前装过 3.1.2 及以下的，要先卸载那个才能装 2.x 正式版。
       - name: 删除旧测试包
         env: { GH_TOKEN: "${{ github.token }}" }
         run: |
-          keep=" $(cd out && echo *.apk) "
+          keep=" $(cd out && echo *.apk) latest.json latest-m.json "
           gh api repos/${{ github.repository }}/releases/tags/v3-beta --jq '.assets[] | "\(.id) \(.name)"' | while read id name; do
             case "$keep" in *" $name "*) ;; *) echo "删除 $name"; gh api -X DELETE repos/${{ github.repository }}/releases/assets/$id ;; esac
           done
