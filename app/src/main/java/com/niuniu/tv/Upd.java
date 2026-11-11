@@ -24,10 +24,29 @@ public class Upd {
     static long lastInstall = 0;
 
     static File dir(Context c) {
-        // 放 files 目录：缓存目录在存储紧张时会被系统或清理工具整个删掉，下载到一半就 FileNotFound
-        File d = new File(Build.VERSION.SDK_INT >= 24 || c.getExternalCacheDir() == null ? c.getFilesDir() : c.getExternalCacheDir(), "apk");
+        // 安卓 7 以上放 files 目录（FileProvider 交给安装器）。
+        // 安卓 6 及以下安装器只认 file://，以前放外部缓存目录，但有的电视（如老款小米电视）外部存储写不进去，
+        // 推送和在线升级都 FileNotFound。现在依次试外部缓存、外部 files，都写不了就放内部 files 并设成所有人可读。
+        if (Build.VERSION.SDK_INT >= 24) { File d = new File(c.getFilesDir(), "apk"); d.mkdirs(); return d; }
+        File[] tries = { c.getExternalCacheDir(), c.getExternalFilesDir(null) };
+        for (File r : tries) {
+            if (r == null) continue;
+            File d = new File(r, "apk");
+            if (writable(d)) return d;
+        }
+        File in = c.getFilesDir(), d = new File(in, "apk");
         d.mkdirs();
+        in.setExecutable(true, false); d.setExecutable(true, false); d.setReadable(true, false);
         return d;
+    }
+
+    private static boolean writable(File d) {
+        try {
+            d.mkdirs();
+            File t = new File(d, ".w");
+            java.io.FileOutputStream o = new java.io.FileOutputStream(t); o.write(1); o.close();
+            return t.delete() || true;
+        } catch (Throwable e) { return false; }
     }
 
     static File target(Context c) {
@@ -39,7 +58,7 @@ public class Upd {
     static int cleanup(Context c, boolean force) {
         if (!force && System.currentTimeMillis() - lastInstall < 5000) return 0;
         int n = 0;
-        File[] roots = { c.getFilesDir(), c.getCacheDir(), c.getExternalCacheDir() };
+        File[] roots = { c.getFilesDir(), c.getCacheDir(), c.getExternalCacheDir(), c.getExternalFilesDir(null) };
         for (File r : roots) {
             if (r == null) continue;
             File[] fs = new File(r, "apk").listFiles();
@@ -53,7 +72,7 @@ public class Upd {
     /** 统计残留安装包：{"n":个数,"mb":大小} */
     static JSONObject info(Context c) {
         int n = 0; long b = 0;
-        File[] roots = { c.getFilesDir(), c.getCacheDir(), c.getExternalCacheDir() };
+        File[] roots = { c.getFilesDir(), c.getCacheDir(), c.getExternalCacheDir(), c.getExternalFilesDir(null) };
         for (File r : roots) {
             if (r == null) continue;
             File[] fs = new File(r, "apk").listFiles();
