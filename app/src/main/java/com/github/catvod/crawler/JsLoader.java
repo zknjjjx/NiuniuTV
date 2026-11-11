@@ -25,6 +25,9 @@ import okhttp3.Response;
 public class JsLoader {
     private static final ConcurrentHashMap<String, Spider> spiders = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, Class<?>> classes = new ConcurrentHashMap<>();
+    /** 每个 JS 源一个 QuickJS 引擎，很占内存：只留最近用过的 MAX 个，多了就销毁最久没用的（妞妞影视） */
+    private static final java.util.LinkedList<String> order = new java.util.LinkedList<>();
+    public static int MAX = 16;
     //当前的Js爬虫key
     private volatile String recentKey = "";
 
@@ -40,7 +43,7 @@ public class JsLoader {
             spider.cancelByTag();
             spider.destroy();
         }
-        spiders.clear();
+        spiders.clear(); order.clear();
         classes.clear();
         recentKey = "";
     }
@@ -139,8 +142,12 @@ public class JsLoader {
     public synchronized Spider getSpider(String key, String api, String ext, String jar) {
         recentKey = key;
         if (spiders.containsKey(key)){
-            Log.i("JSLoader", "echo-getSpider cached "+key);
+            order.remove(key); order.addLast(key);
             return spiders.get(key);
+        }
+        while (order.size() >= MAX) {
+            Spider old = spiders.remove(order.removeFirst());
+            if (old != null) try { old.destroy(); } catch (Throwable ignored) {}
         }
         Class<?> classLoader = null;
         if (!jar.isEmpty()) {
@@ -155,7 +162,7 @@ public class JsLoader {
             Spider sp = new JsSpider(key, api, classLoader);
             sp.siteKey = key;
             sp.init(App.getInstance(), ext);
-            spiders.put(key, sp);
+            spiders.put(key, sp); order.addLast(key);
             return sp;
         } catch (Throwable th) {
             LOG.i("echo-getSpider-error "+th.getMessage());

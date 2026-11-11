@@ -294,6 +294,13 @@ const BOX_PRESETS = [
 ];
 const BOX_DEF = "\u996D\u592A\u786C";
 const BOX = { sites: [], cms: [], state: "", ready: null };
+const BOXPAR = (() => {
+  try {
+    if (APP && NN.boxLow && NN.boxLow()) return 3;
+  } catch (e) {
+  }
+  return MOB ? 4 : 6;
+})();
 function nnCall(fn, args) {
   return new Promise((r) => {
     const id = "x" + ++seq;
@@ -464,7 +471,7 @@ function resolve(name, year, onFound, onCam) {
     let bi = 0, br = 0;
     const next = () => {
       if (!alive || bi >= list.length && br === 0) return done();
-      while (br < (MOB ? 4 : 6) && bi < list.length) {
+      while (br < BOXPAR && bi < list.length) {
         const s = list[bi++];
         br++;
         boxOne(s, name, year, want, onFound, onCam, () => alive).catch(() => {

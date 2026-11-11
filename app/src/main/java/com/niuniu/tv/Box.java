@@ -69,7 +69,7 @@ public class Box {
     static class Jx { String name, url; List<String> flags = new ArrayList<>(); Map<String, String> headers = new HashMap<>(); }
     private static final List<Jx> jxs = Collections.synchronizedList(new ArrayList<Jx>());
 
-    static void init(Context c) { if (app == null) app = c.getApplicationContext(); }
+    static void init(Context c) { if (app == null) { app = c.getApplicationContext(); com.github.catvod.crawler.JsLoader.MAX = lowRam() ? 6 : 16; } }
 
     // ---------------- 配置 ----------------
 
@@ -249,7 +249,7 @@ public class Box {
             }
             jxs.add(j);
         }
-        if (hasPy) { try { py.setConfig(o.toString()); } catch (Throwable e) { Log.w(TAG, "py cfg " + e); } }
+        pyCfg = hasPy ? o.toString() : null;  // Python 解释器很占内存：真用到 Python 源时才启动
     }
 
     /** 站名去掉表情和装饰：「💓‍玩偶┃4K💓‍」→「玩偶」 */
@@ -310,6 +310,17 @@ public class Box {
     static String state() { return loading ? "加载中…" : state; }
 
     private static final Map<String, Object> locks = new ConcurrentHashMap<>();
+    private static volatile String pyCfg = null;
+
+    /** 低内存设备（老电视）：同时搜的爬虫少一些、保留的 JS 引擎少一些 */
+    static boolean lowRam() {
+        try {
+            android.app.ActivityManager am = (android.app.ActivityManager) app.getSystemService(Context.ACTIVITY_SERVICE);
+            android.app.ActivityManager.MemoryInfo mi = new android.app.ActivityManager.MemoryInfo();
+            am.getMemoryInfo(mi);
+            return am.isLowRamDevice() || mi.totalMem < 1600L * 1024 * 1024 || am.getLargeMemoryClass() < 256;
+        } catch (Throwable e) { return false; }
+    }
 
     static Spider spider(Site s) {
         Object lk = locks.get(s.key);
@@ -317,7 +328,10 @@ public class Box {
         synchronized (lk) {
             String api = s.api;
             if (api.contains(".js")) return js.getSpider(s.key, api, s.ext, s.jar);
-            if (api.contains(".py")) { py.setRecentPyKey(s.key); return py.getSpider(s.key, api, s.ext); }
+            if (api.contains(".py")) {
+                String c = pyCfg; if (c != null) { try { py.setConfig(c); } catch (Throwable e) { Log.w(TAG, "py cfg " + e); } }
+                py.setRecentPyKey(s.key); return py.getSpider(s.key, api, s.ext);
+            }
             return jar.getSpider(s.key, api, s.ext, s.jar);
         }
     }

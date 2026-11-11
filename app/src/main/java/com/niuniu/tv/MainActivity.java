@@ -180,6 +180,9 @@ public class MainActivity extends Activity {
         public String boxSites() { return Box.sitesJson(); }
 
         @JavascriptInterface
+        public boolean boxLow() { return Box.lowRam(); }
+
+        @JavascriptInterface
         public String boxCms() { return Box.cmsJson(); }
 
         @JavascriptInterface

@@ -167,6 +167,8 @@ const BOX_PRESETS = [
 ];
 const BOX_DEF = "饭太硬";
 const BOX = { sites: [], cms: [], state: "", ready: null };
+// 爬虫源同时搜几个：电视 6、手机 4，低内存的老电视 3
+const BOXPAR = (() => { try { if (APP && NN.boxLow && NN.boxLow()) return 3; } catch (e) {} return MOB ? 4 : 6; })();
 function nnCall(fn, args) {
   return new Promise(r => { const id = "x" + (++seq); cbs[id] = r; NN[fn].apply(NN, [id].concat(args)); });
 }
@@ -281,12 +283,12 @@ function resolve(name, year, onFound, onCam) {
   let alive = true, idx = 0, running = 0;
   const have = {}; SRC.list.forEach(s => { have[s.api] = 1; });
   const sites = SRC.list.concat(BOX.cms.filter(s => !have[s.api]));
-  // 爬虫源：等接口加载好再搜，同时最多 6 个（手机 4 个），每个最多等 9 秒
+  // 爬虫源：等接口加载好再搜，同时 BOXPAR 个，每个最多等 9 秒
   const boxDone = APP && NN.boxSearch ? (BOX.ready || Promise.resolve(BOX)).then(() => new Promise(done => {
     const list = BOX.sites.slice(); let bi = 0, br = 0;
     const next = () => {
       if (!alive || (bi >= list.length && br === 0)) return done();
-      while (br < (MOB ? 4 : 6) && bi < list.length) {
+      while (br < BOXPAR && bi < list.length) {
         const s = list[bi++]; br++;
         boxOne(s, name, year, want, onFound, onCam, () => alive).catch(() => {}).then(() => { br--; next(); });
       }
