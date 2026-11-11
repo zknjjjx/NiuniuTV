@@ -88,7 +88,66 @@ public class Pre {
 
     static boolean isList(Uri u) {
         String p = u.getPath() == null ? "" : u.getPath().toLowerCase();
-        return p.endsWith(".m3u8");
+        return p.endsWith(".m3u8") || lists.contains(u.toString());
+    }
+    /** 地址不带 .m3u8、但内容是播放列表的（看开头 #EXTM3U 认出来） */
+    static final Set<String> lists = java.util.Collections.newSetFromMap(new java.util.concurrent.ConcurrentHashMap<String, Boolean>());
+    /** mp4 等整文件：支持分段下载就记总字节数，不支持记 -1 */
+    static final java.util.concurrent.ConcurrentHashMap<String, Long> fileLen = new java.util.concurrent.ConcurrentHashMap<>();
+    static final long CHUNK = 2L << 20;   // mp4 按 2 MB 一段，后台 5 路各下一段，播放器也按同样的段读，彼此不卡
+
+    /** 播放器报片长（mp4 要靠它把字节换算成时间） */
+    static synchronized void duration(String url, long ms) {
+        if (job != null && job.url.equals(url) && ms > 0 && job.durUs <= 0) job.durUs = ms * 1000;
+    }
+
+    /** 等后台认出这个地址是不是能分段的整文件，最多 3 秒；能分段返回总长，否则 -1 */
+    static long waitLen(String url) {
+        for (int i = 0; i < 30; i++) {
+            Long l = fileLen.get(url);
+            if (l != null) return l;
+            Job j = job;
+            if (j == null || j.dead || !j.url.equals(url)) return -1;
+            try { Thread.sleep(100); } catch (InterruptedException e) { return -1; }
+        }
+        return -1;
+    }
+
+    /** 整文件按 CHUNK 对齐分段读：播放器一次只占一段，后台在别的段上下载互不阻塞 */
+    static class Chunked implements DataSource {
+        final DataSource in; final long total; DataSpec base; long pos, left; boolean eof, open;
+        Chunked(DataSource in, long total) { this.in = in; this.total = total; }
+        @Override public void addTransferListener(@NonNull TransferListener t) { in.addTransferListener(t); }
+        @Override public long open(@NonNull DataSpec s) throws IOException {
+            base = s; pos = s.position; left = s.length; eof = false;
+            next();
+            return s.length != C.LENGTH_UNSET ? s.length : Math.max(0, total - s.position);
+        }
+        void next() throws IOException {
+            long len = (pos / CHUNK + 1) * CHUNK - pos;
+            len = Math.min(len, total - pos);
+            if (left != C.LENGTH_UNSET) len = Math.min(len, left);
+            if (len <= 0) { eof = true; return; }
+            in.open(base.buildUpon().setPosition(pos).setLength(len).build());
+            open = true;
+        }
+        @Override public int read(@NonNull byte[] b, int o, int l) throws IOException {
+            while (true) {
+                if (eof) return C.RESULT_END_OF_INPUT;
+                int n = in.read(b, o, l);
+                if (n == C.RESULT_END_OF_INPUT) {
+                    in.close(); open = false;
+                    next();
+                    continue;
+                }
+                pos += n;
+                if (left != C.LENGTH_UNSET) left -= n;
+                return n;
+            }
+        }
+        @Nullable @Override public Uri getUri() { return in.getUri(); }
+        @NonNull @Override public Map<String, List<String>> getResponseHeaders() { return in.getResponseHeaders(); }
+        @Override public void close() throws IOException { if (open) { open = false; in.close(); } }
     }
 
     /** 播放器用：m3u8 列表直连（交给去广告），分片走磁盘缓存 */
@@ -107,7 +166,14 @@ public class Pre {
         final DataSource direct, cached; DataSource cur;
         Router(DataSource d, DataSource c) { direct = d; cached = c; }
         @Override public void addTransferListener(@NonNull TransferListener t) { direct.addTransferListener(t); cached.addTransferListener(t); }
-        @Override public long open(@NonNull DataSpec s) throws IOException { cur = isList(s.uri) ? direct : cached; return cur.open(s); }
+        @Override public long open(@NonNull DataSpec s) throws IOException {
+            if (isList(s.uri)) cur = direct;
+            else {
+                long t = s.uri.getScheme() != null && s.uri.getScheme().startsWith("http") ? waitLen(s.uri.toString()) : -1;
+                cur = t > 0 ? new Chunked(cached, t) : cached;
+            }
+            return cur.open(s);
+        }
         @Override public int read(@NonNull byte[] b, int o, int l) throws IOException { int n = cur.read(b, o, l); if (n > 0) playerData = SystemClock.uptimeMillis(); return n; }
         @Nullable @Override public Uri getUri() { return cur == null ? null : cur.getUri(); }
         @NonNull @Override public Map<String, List<String>> getResponseHeaders() { return cur == null ? java.util.Collections.<String, List<String>>emptyMap() : cur.getResponseHeaders(); }
@@ -241,7 +307,7 @@ public class Pre {
 
     static class Job extends Thread {
         final String url;
-        volatile long posUs, aheadUs, lastData, bufUs;
+        volatile long posUs, aheadUs, lastData, bufUs, durUs;
         volatile boolean dead, gated, ready, everReady, crowded;
         int rejects; long rejectAt;
         volatile int lanes = WORKERS;
@@ -276,7 +342,7 @@ public class Pre {
 
         @Override public void run() {
             try {
-                if (!isList(Uri.parse(url))) { dead = true; clearOthers(new HashSet<String>()); return; }
+                if (!isList(Uri.parse(url)) && !sniff()) { runFile(); return; }
                 HlsPlaylist pl = null;
                 for (int i = 0; i < 3 && pl == null && !dead; i++) { try { pl = fetch(url); } catch (Exception e) { sleepQ(1500); } }
                 if (pl instanceof HlsMultivariantPlaylist) {
@@ -288,7 +354,7 @@ public class Pre {
                 }
                 if (!(pl instanceof HlsMediaPlaylist) || dead) { dead = true; return; }
                 HlsMediaPlaylist mp = (HlsMediaPlaylist) pl;
-                if (!mp.hasEndTag) { dead = true; return; }   // 直播不预下载
+                if (!mp.hasEndTag && !vodLike(mp)) { dead = true; return; }   // 真直播不预下载；漏写结束标记的点播照样下
                 Set<String> keys = new HashSet<>();
                 Set<String> inits = new HashSet<>();
                 List<Seg> segs = new ArrayList<>();
@@ -306,16 +372,78 @@ public class Pre {
                 this.keys = keys;
                 this.segs = segs;
                 clearOthers(keys);
-                for (int i = 1; i < WORKERS && !dead; i++) {
-                    final int lane = i;
-                    Thread t = new Thread(new Runnable() { public void run() { work(lane); } }, "nn-pre" + i);
-                    t.setPriority(Thread.MIN_PRIORITY + 1);
-                    synchronized (helpers) { helpers.add(t); }
-                    t.start();
-                }
-                work(0);
+                lanesGo();
             } catch (Throwable ignore) {
             } finally { dead = true; }
+        }
+
+        void lanesGo() {
+            for (int i = 1; i < WORKERS && !dead; i++) {
+                final int lane = i;
+                Thread t = new Thread(new Runnable() { public void run() { work(lane); } }, "nn-pre" + i);
+                t.setPriority(Thread.MIN_PRIORITY + 1);
+                synchronized (helpers) { helpers.add(t); }
+                t.start();
+            }
+            work(0);
+        }
+
+        /** 地址不带 .m3u8：读开头 2 KB。是播放列表返回 true；否则记下整文件能不能分段（总长或 -1） */
+        boolean sniff() {
+            byte[] b = new byte[2048]; int n = 0; long total = -1;
+            DefaultHttpDataSource d = http().createDataSource();
+            try {
+                d.open(new DataSpec.Builder().setUri(Uri.parse(url)).setPosition(0).setLength(b.length).build());
+                for (int r; n < b.length && (r = d.read(b, n, b.length - n)) > 0; ) n += r;
+                for (Map.Entry<String, List<String>> e : d.getResponseHeaders().entrySet()) {
+                    if (e.getKey() == null || !e.getKey().equalsIgnoreCase("Content-Range") || e.getValue().isEmpty()) continue;
+                    String v = e.getValue().get(0); int k = v.lastIndexOf('/');
+                    if (k > 0) try { total = Long.parseLong(v.substring(k + 1).trim()); } catch (Exception ignore) {}
+                }
+            } catch (Throwable e) { fileLen.put(url, -1L); return false; }
+            finally { try { d.close(); } catch (Exception ignore) {} }
+            String head = new String(b, 0, Math.min(n, 64), java.nio.charset.Charset.forName("ISO-8859-1")).replace("\uFEFF", "").replace("\u00EF\u00BB\u00BF", "").trim();
+            if (head.startsWith("#EXTM3U")) { lists.add(url); return true; }
+            boolean mp4 = n >= 8 && b[4] == 'f' && b[5] == 't' && b[6] == 'y' && b[7] == 'p';
+            fileLen.put(url, mp4 && total > CHUNK ? total : -1L);
+            return false;
+        }
+
+        /** 整文件（mp4）：能分段就按 2 MB 一段 5 路往前下，字节按片长折算成时间；不能分段就交给播放器单路 */
+        void runFile() {
+            try {
+                Long t = fileLen.get(url);
+                if (t == null || t <= 0) { clearOthers(new HashSet<String>()); return; }
+                long total = t;
+                while (!dead && durUs <= 0) sleepQ(500);   // 等播放器报片长
+                if (dead) return;
+                Set<String> keys = new HashSet<>(); keys.add(url);
+                List<Seg> segs = new ArrayList<>();
+                Uri u = Uri.parse(url);
+                for (long off = 0; off < total; off += CHUNK) {
+                    long len = Math.min(CHUNK, total - off);
+                    segs.add(seg(u, off, len, (long) ((double) off / total * durUs), (long) ((double) (off + len) / total * durUs)));
+                }
+                this.keys = keys; this.segs = segs;
+                clearOthers(keys);
+                lanesGo();
+            } catch (Throwable ignore) {
+            } finally { dead = true; }
+        }
+
+        /** 没有结束标记：标了 VOD 的直接算；否则 4 秒后再拉一次，列表没变且总长超过 5 分钟就当点播 */
+        boolean vodLike(HlsMediaPlaylist mp) {
+            if (mp.playlistType == HlsMediaPlaylist.PLAYLIST_TYPE_VOD) return true;
+            if (mp.playlistType == HlsMediaPlaylist.PLAYLIST_TYPE_EVENT || mp.segments.isEmpty() || mp.durationUs < 300_000_000L) return false;
+            sleepQ(4000);
+            if (dead) return false;
+            try {
+                HlsPlaylist p2 = fetch(mp.baseUri);
+                if (!(p2 instanceof HlsMediaPlaylist)) return false;
+                HlsMediaPlaylist m2 = (HlsMediaPlaylist) p2;
+                return m2.segments.size() == mp.segments.size() && m2.mediaSequence == mp.mediaSequence
+                        && m2.segments.get(m2.segments.size() - 1).url.equals(mp.segments.get(mp.segments.size() - 1).url);
+            } catch (Exception e) { return false; }
         }
 
         /** 一个下载线程：反复挑一个没人在下的分片下载。main=true 的那个负责定时清理旧缓存 */

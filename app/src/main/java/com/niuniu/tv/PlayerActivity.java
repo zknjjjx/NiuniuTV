@@ -98,6 +98,7 @@ public class PlayerActivity extends Activity {
         if (player == null) return;
         Pre.position(curUrl, player.getCurrentPosition(), player.getBufferedPosition(),
                 started && player.getPlaybackState() == Player.STATE_READY);
+        if (player.getDuration() > 0 && !player.isCurrentMediaItemLive()) Pre.duration(curUrl, player.getDuration());
         crowdCheck();
     }
     /** 片源嫌连接多、退回单路后：1080 单路不到 0.9 MB/s 撑不住，缓存剩不到 1 分钟就主动换源，不等卡住 */
