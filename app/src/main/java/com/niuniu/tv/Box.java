@@ -83,7 +83,7 @@ public class Box {
             loading = true;
             File cache = new File(dir("cfg"), MD5.string2MD5(url) + ".json");
             String text = null, base = url;
-            if (!force && cache.exists()) {  // 先用上次成功的配置马上开用，后台再更新缓存（下次生效）
+            if (cache.exists()) {  // 先用上次成功的配置马上开用（切换接口也一样），后台再更新缓存，后台再更新缓存（下次生效）
                 try {
                     String all = new String(read(cache), "UTF-8");
                     int i = all.indexOf('\n');
@@ -131,7 +131,7 @@ public class Box {
         String key = null;
         if (url.contains(";pk;")) { String[] a = url.split(";pk;"); url = a[0]; key = a[1]; }
         if (!url.startsWith("http")) url = "http://" + url;
-        String raw = httpText(url, 15000);
+        String raw = httpText(url, 8000);
         String text = decode(raw, key);
         text = text.trim();
         if (text.startsWith("\uFEFF")) text = text.substring(1);
@@ -271,8 +271,24 @@ public class Box {
         if (img) src = src.substring(4);
         File f = new File(dir("jar"), MD5.string2MD5(src) + ".jar");
         boolean ok = f.exists() && f.length() > 0 && (md5.isEmpty() ? System.currentTimeMillis() - f.lastModified() < 24 * 3600e3 : md5.equalsIgnoreCase(MD5.getFileMd5(f)));
+        if (!ok && f.exists() && f.length() > 0) {   // 有旧 jar：先用旧的，后台下新的，下次生效
+            final String s2 = src; final boolean i2 = img; final File f2 = f;
+            new Thread(() -> { try { fetchJar(s2, i2, f2); } catch (Throwable e) { Log.w(TAG, "jar refresh " + e); } }).start();
+            ok = true;
+        }
         if (!ok) {
-            try {
+            try { fetchJar(src, img, f); } catch (Throwable e) { Log.w(TAG, "jar download " + e); }
+        }
+        if (f.exists() && f.length() > 0) {
+            File ro = new File(dir("jar"), "main_" + f.getName());
+            if (!ro.exists() || ro.length() != f.length() || ro.lastModified() < f.lastModified()) { ro.delete(); write(ro, read(f)); }
+            jar.load(ro.getAbsolutePath());
+        }
+    }
+
+    private static void fetchJar(String src, boolean img, File f) throws Exception {
+        {
+            {
                 byte[] b = httpBytes(src, 30000);
                 if (img) {
                     String t = new String(b, "UTF-8");
@@ -281,13 +297,8 @@ public class Box {
                 }
                 int pk = indexOf(b, new byte[]{'P', 'K', 3, 4});
                 if (pk > 0) { byte[] c = new byte[b.length - pk]; System.arraycopy(b, pk, c, 0, c.length); b = c; }
-                if (b.length > 1000) { if (f.exists()) f.delete(); write(f, b); }
-            } catch (Throwable e) { Log.w(TAG, "jar download " + e); }
-        }
-        if (f.exists() && f.length() > 0) {
-            File ro = new File(dir("jar"), "main_" + f.getName());
-            if (!ro.exists() || ro.length() != f.length()) { ro.delete(); write(ro, read(f)); }
-            jar.load(ro.getAbsolutePath());
+                if (b.length > 1000) { File t = new File(f.getPath() + ".tmp"); write(t, b); if (!t.renameTo(f)) { f.delete(); t.renameTo(f); } }
+            }
         }
     }
 

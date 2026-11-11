@@ -114,7 +114,7 @@ public class Net {
                 u = br.url;
                 o.put("ttfr", System.currentTimeMillis() - t0);
             }
-            String seg = null, keyUri = null, ivHex = null;
+            String seg = null, keyUri = null, ivHex = null, mapUri = null;
             long seq = 0, segSeq = 0;
             for (int depth = 0; depth < 3 && seg == null; depth++) {
                 Res r = get(u, null, Math.max(2000, budgetMs), 2 * 1024 * 1024);
@@ -137,6 +137,10 @@ public class Net {
                 for (String line : body.split("\n")) {
                     line = line.trim();
                     if (line.startsWith("#EXT-X-MEDIA-SEQUENCE:")) { try { seq = Long.parseLong(line.substring(22).trim()); } catch (Exception ignore) {} }
+                    if (line.startsWith("#EXT-X-MAP")) {
+                        java.util.regex.Matcher mm = java.util.regex.Pattern.compile("URI=\"([^\"]+)\"").matcher(line);
+                        if (mm.find()) mapUri = new URL(new URL(base), mm.group(1)).toString();
+                    }
                     if (line.startsWith("#EXT-X-KEY")) {
                         keyUri = null; ivHex = null;
                         if (line.contains("METHOD=AES-128")) {
@@ -188,7 +192,22 @@ public class Net {
                         Res kr = get(keyUri, null, 3000, 64);
                         d = kr.code < 400 && kr.body.length == 16 ? Vprobe.aes(kr.body, Vprobe.ivOf(ivHex, segSeq), d) : null;
                     }
-                    int[] wh = Vprobe.tsRes(d);
+                    int[] wh = d == null ? null : Vprobe.tsRes(d);
+                    if (wh == null && d != null) wh = Vprobe.mp4Res(d);                      // mp4 / fMP4 分片
+                    if (wh == null && mapUri != null) {                                     // fMP4：分辨率在初始化段里
+                        Res mr = get(mapUri, null, 3000, 262144);
+                        if (mr.code < 400) wh = Vprobe.mp4Res(mr.body);
+                    }
+                    if (wh == null && d != null && seg.equals(u) && Vprobe.isMp4(d)) {      // 整个 mp4、moov 在文件尾：取最后 1MB
+                        JSONObject rh = new JSONObject(); rh.put("Range", "bytes=-1048576");
+                        HttpURLConnection tc = open(seg, rh, 3000);
+                        if (tc.getResponseCode() == 206) {
+                            ByteArrayOutputStream tb = new ByteArrayOutputStream(); InputStream ti = tc.getInputStream(); byte[] bb = new byte[32768]; int k;
+                            while ((k = ti.read(bb)) > 0 && tb.size() < 1048576) tb.write(bb, 0, k);
+                            ti.close(); wh = Vprobe.mp4Res(tb.toByteArray());
+                        }
+                        tc.disconnect();
+                    }
                     if (wh != null) o.put("h", Math.max(wh[1], wh[0] * 9 / 16));
                 } catch (Throwable ignore) {}
             }

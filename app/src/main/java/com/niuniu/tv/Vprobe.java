@@ -140,4 +140,28 @@ final class Vprobe {
         }
         return new int[]{w, h};
     }
+
+    static boolean isMp4(byte[] d) {
+        if (d == null || d.length < 12) return false;
+        String t = new String(d, 4, 4);
+        return t.equals("ftyp") || t.equals("styp") || t.equals("moof") || t.equals("moov") || t.equals("mdat") || t.equals("free");
+    }
+
+    /** 在一段 mp4 数据里找视频轨的 tkhd，读宽高（16.16 定点）；没有返回 null */
+    static int[] mp4Res(byte[] d) {
+        if (d == null) return null;
+        int best = 0; int[] r = null;
+        for (int i = 4; i + 92 < d.length; i++) {
+            if (d[i] != 't' || d[i + 1] != 'k' || d[i + 2] != 'h' || d[i + 3] != 'd') continue;
+            int ver = d[i + 4] & 0xFF;
+            int off = i + 4 + (ver == 1 ? 88 : 76);   // 宽高在 box 尾部
+            if (off + 8 > d.length) continue;
+            int w = u16(d, off), h = u16(d, off + 4);
+            int[] c = { w, h };
+            if (ok(c) && w * h > best) { best = w * h; r = c; }
+        }
+        return r;
+    }
+
+    private static int u16(byte[] d, int o) { return ((d[o] & 0xFF) << 8) | (d[o + 1] & 0xFF); }
 }

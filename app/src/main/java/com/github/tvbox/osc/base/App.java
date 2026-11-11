@@ -43,6 +43,16 @@ public class App extends Application {
                 if (def != null) def.uncaughtException(t, e);
             }
         });
+        // 主线程：爬虫代码抛的异常（调用栈里没有本 App 自己的代码）吞掉，主循环接着跑
+        new Handler(Looper.getMainLooper()).post(new Runnable() { public void run() {
+            while (true) {
+                try { Looper.loop(); return; }
+                catch (Throwable e) {
+                    if (ours(e)) throw e instanceof RuntimeException ? (RuntimeException) e : new RuntimeException(e);
+                    Log.e("App", "spider error on main thread, ignored", e);
+                }
+            }
+        } });
         registerActivityLifecycleCallbacks(new ActivityLifecycleCallbacks() {
             public void onActivityCreated(Activity a, Bundle b) { cur = a; live.add(a); }
             public void onActivityStarted(Activity a) {}
@@ -55,6 +65,18 @@ public class App extends Application {
     }
 
     public Activity getCurrentActivity() { return cur; }
+
+    /** 异常是不是本 App 自己代码引起的（是就照常崩溃，不掩盖真问题） */
+    private static boolean ours(Throwable e) {
+        for (Throwable x = e; x != null; x = x.getCause()) {
+            for (StackTraceElement s : x.getStackTrace()) {
+                String c = s.getClassName();
+                if (c.startsWith("com.niuniu.")) return true;
+            }
+            if (x.getCause() == x) break;
+        }
+        return false;
+    }
 
     private static String readSmall(java.io.File f) throws java.io.IOException {
         java.io.FileInputStream in = new java.io.FileInputStream(f);
@@ -121,7 +143,16 @@ public class App extends Application {
             if (mine.contains(v)) continue;
             if (p != null && (p.type == WindowManager.LayoutParams.TYPE_TOAST || p.type == WindowManager.LayoutParams.TYPE_APPLICATION_STARTING)) continue;
             if (v.getClass().getName().contains("Toast")) continue;
-            try { a.getWindowManager().removeViewImmediate(v); Log.i("App", "closed spider window " + v.getClass().getName()); } catch (Throwable e) { Log.w("App", "close " + e); }
+            if (v.getVisibility() == View.GONE || p == null) continue;
+            // 不直接移除（爬虫之后再关它会抛异常把 App 带崩），改为藏起来、不接按键和触摸
+            try {
+                v.setVisibility(View.GONE);
+                p.flags |= WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
+                p.flags &= ~WindowManager.LayoutParams.FLAG_DIM_BEHIND;
+                p.width = 1; p.height = 1;
+                a.getWindowManager().updateViewLayout(v, p);
+                Log.i("App", "hid spider window " + v.getClass().getName());
+            } catch (Throwable e) { Log.w("App", "hide " + e); }
         }
     }
 }
