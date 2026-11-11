@@ -158,6 +158,7 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void searchDone() {
             searching = false;
+            PlayerActivity.searchEnded();
             runOnUiThread(new Runnable() { public void run() { if (paused && web != null) web.pauseTimers(); } });
         }
 

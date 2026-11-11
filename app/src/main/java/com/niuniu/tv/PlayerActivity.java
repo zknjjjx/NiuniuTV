@@ -123,6 +123,7 @@ public class PlayerActivity extends Activity {
             si = data.optInt("si", 0);
             ei = data.optInt("ei", 0);
             resumePos = data.optLong("pos", 0);
+            searchOver = !data.optBoolean("searching", false);
         } catch (Exception e) {
             finish();
             return;
@@ -801,6 +802,53 @@ public class PlayerActivity extends Activity {
             if (s != null && s.optLong("bps", 0) == 0 && s.optJSONArray("eps") != null && s.optJSONArray("eps").length() > 0) probeQ.add(i);
         }
         kickProbe();
+        h.postDelayed(new Runnable() { public void run() { searchOver = true; checkAllDone(); } }, 100000);   // 网页没报搜完也最多等 100 秒
+        checkAllDone();
+    }
+    /** 网页报告搜源结束 */
+    static void searchEnded() {
+        final PlayerActivity a = current == null ? null : current.get();
+        if (a == null || a.gone) return;
+        a.h.post(new Runnable() { public void run() { a.searchOver = true; a.checkAllDone(); } });
+    }
+    private boolean searchOver, settled;
+    /** 搜源和测速全部结束后：换源列表按自动选源的顺序重排一次；自动模式下，除非已在放 1080 且缓存够 1 分钟，否则按新排序选一次（只在档次更高时才换） */
+    private void checkAllDone() {
+        if (settled || gone || !started || !searchOver || !probeQ.isEmpty() || workers.get() > 0) return;
+        settled = true;
+        try {
+            int n = sources.length();
+            final long[] sc = new long[n];
+            Integer[] ord = new Integer[n];
+            for (int i = 0; i < n; i++) {
+                JSONObject o = sources.optJSONObject(i);
+                sc[i] = tierOf(o) * 10000000000L + Math.max(0, o.optLong("bps", 0));
+                ord[i] = i;
+            }
+            java.util.Arrays.sort(ord, new java.util.Comparator<Integer>() { public int compare(Integer x, Integer y) { return Long.compare(sc[y], sc[x]); } });
+            JSONArray ns = new JSONArray();
+            int[] map = new int[n];
+            for (int k = 0; k < n; k++) { ns.put(sources.optJSONObject(ord[k])); map[ord[k]] = k; }
+            List<Integer> nf = new ArrayList<>();
+            for (Integer f : failed) if (f >= 0 && f < n) nf.add(map[f]);
+            si = map[si];
+            sources = ns;
+            data.put("sources", ns);
+            failed.clear(); failed.addAll(nf);
+        } catch (Exception ignore) { return; }
+        if (panelOn() && tab == 1) { fillPanel(); plist.requestFocus(); }   // 光标回到当前源，不停在别的行
+        if (!autoSrc || player == null) return;
+        JSONObject cur = sources.optJSONObject(si);
+        long pos = player.getCurrentPosition();
+        long ahead = Math.max(Pre.cachedAheadMs(curUrl, pos), player.getBufferedPosition() - pos);
+        if (cur.optInt("h", 0) >= 1000 && ahead >= 60000) return;
+        int to = bestSource();
+        if (to == si || tierOf(sources.optJSONObject(to)) <= tierOf(cur)) return;
+        int idx = matchEp(eps(to), epName(), ei);
+        if (idx < 0) return;
+        si = to; ei = idx; failed.clear();
+        showStatus("测完了，换到更清楚的「" + sources.optJSONObject(si).optString("site") + "」", 3500);
+        load(pos);
     }
     private void kickProbe() {
         while (probing && !gone && !probeQ.isEmpty() && workers.get() < 1) {
@@ -826,7 +874,7 @@ public class PlayerActivity extends Activity {
                             refreshPanel();
                         }});
                     }
-                } finally { workers.decrementAndGet(); }
+                } finally { workers.decrementAndGet(); h.post(new Runnable() { public void run() { checkAllDone(); } }); }
             }}, "probe-rest").start();
         }
     }
