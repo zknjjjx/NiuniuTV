@@ -788,7 +788,7 @@ public class PlayerActivity extends Activity {
     }
 
     // ---------------- 侧边选集 / 换源面板 ----------------
-    /** 起播时还没测完的源和起播后才搜到的源，播放稳了以后在后台接着测：两路并发，缓存够 30 秒才测（最多等 2 分钟），不和正片抢带宽 */
+    /** 起播时还没测完的源和起播后才搜到的源，播放稳了以后在后台接着测：单路逐个测，缓存够 30 秒才测（最多等 2 分钟），不和正片抢带宽 */
     private final java.util.concurrent.ConcurrentLinkedQueue<Integer> probeQ = new java.util.concurrent.ConcurrentLinkedQueue<>();
     private volatile boolean probing, gone;
     private final java.util.concurrent.atomic.AtomicInteger workers = new java.util.concurrent.atomic.AtomicInteger();
@@ -803,7 +803,7 @@ public class PlayerActivity extends Activity {
         kickProbe();
     }
     private void kickProbe() {
-        while (probing && !gone && !probeQ.isEmpty() && workers.get() < 2) {
+        while (probing && !gone && !probeQ.isEmpty() && workers.get() < 1) {
             workers.incrementAndGet();
             new Thread(new Runnable() { public void run() {
                 try {
