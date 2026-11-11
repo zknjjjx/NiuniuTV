@@ -201,6 +201,7 @@ public class PlayerActivity extends Activity {
                         started = true;
                         failed.clear();
                         showOsd();
+                        probeRest();
                     }
                 } else if (st == Player.STATE_BUFFERING) {
                     bufSince = android.os.SystemClock.uptimeMillis();
@@ -786,6 +787,49 @@ public class PlayerActivity extends Activity {
     }
 
     // ---------------- 侧边选集 / 换源面板 ----------------
+    /** 起播时还没测完的源（速度一栏空着），播放稳了以后在后台接着测：两路并发，缓存够 30 秒才测，不和正片抢带宽 */
+    private volatile boolean probing;
+    private void probeRest() {
+        if (probing || sources == null) return;
+        final java.util.concurrent.ConcurrentLinkedQueue<Integer> q = new java.util.concurrent.ConcurrentLinkedQueue<>();
+        for (int i = 0; i < sources.length(); i++) {
+            JSONObject s = sources.optJSONObject(i);
+            if (s != null && s.optLong("bps", 0) == 0 && s.optJSONArray("eps") != null && s.optJSONArray("eps").length() > 0) q.add(i);
+        }
+        if (q.isEmpty()) return;
+        probing = true;
+        for (int t = 0; t < 2; t++) new Thread(new Runnable() { public void run() {
+            Integer i;
+            while (probing && (i = q.poll()) != null) {
+                for (int w = 0; w < 120 && probing && !calm(); w++) { try { Thread.sleep(1000); } catch (InterruptedException e) { return; } }
+                if (!probing) return;
+                final int k = i;
+                String url;
+                try { url = sources.optJSONObject(k).getJSONArray("eps").getJSONObject(0).optString("url"); } catch (Exception e) { continue; }
+                final JSONObject o = Net.probe(url, 8000, 524288);
+                h.post(new Runnable() { public void run() {
+                    try {
+                        JSONObject s = sources.optJSONObject(k);
+                        s.put("bps", o.optLong("bps", 0));
+                        if (o.has("h")) s.put("h", o.optInt("h"));
+                        if (o.has("dur") && s.optLong("dur", 0) == 0) s.put("dur", o.optLong("dur"));
+                        if (o.has("br")) s.put("br", o.optLong("br"));
+                    } catch (Exception ignore) {}
+                    if (panelOn() && tab == 1 && padapter != null) padapter.notifyDataSetChanged();
+                }});
+            }
+        }}, "probe-rest").start();
+    }
+    /** 播放顺：已起播、缓存领先 30 秒以上 */
+    private boolean calm() {
+        try {
+            final long[] pos = {-1};
+            final java.util.concurrent.CountDownLatch l = new java.util.concurrent.CountDownLatch(1);
+            h.post(new Runnable() { public void run() { pos[0] = player == null ? -1 : player.getCurrentPosition(); l.countDown(); } });
+            l.await(2, java.util.concurrent.TimeUnit.SECONDS);
+            return pos[0] >= 0 && Pre.cachedAheadMs(curUrl, pos[0]) >= 30000;
+        } catch (Exception e) { return false; }
+    }
     private boolean panelOn() { return panel != null && panel.getVisibility() == View.VISIBLE; }
 
     private LinearLayout pbox;
@@ -985,7 +1029,6 @@ public class PlayerActivity extends Activity {
                     left = s.optString("site");
                     JSONArray e = s.optJSONArray("eps");
                     String res = resName(s.optInt("h", 0)), dn = durName(s);
-                    if (crowdHost(s)) res = res.length() > 0 ? res + "  ·  限单路" : "限单路";
                     if (dn.length() > 0) res = res.length() > 0 ? res + "  ·  " + dn : dn;
                     right = (res.length() > 0 ? res + "  ·  " : "") + (bps > 0 ? String.format(java.util.Locale.US, "%.1f MB/s  ·  ", bps / 1048576.0) : bps < 0 ? "不通  ·  " : "")
                             + (e == null ? 0 : e.length()) + " 集";
@@ -1234,6 +1277,7 @@ public class PlayerActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        probing = false;
         h.removeCallbacksAndMessages(null);
         if (panel != null) panel.animate().cancel();
         if (player != null) { player.release(); player = null; }
