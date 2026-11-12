@@ -234,7 +234,7 @@ public class PlayerActivity extends Activity {
                 if (c == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS || c == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED) Pre.backoff(curUrl);
                 if (started && net && errN < 3) {
                     errN++;
-                    showStatus("网络波动，重试中（" + errN + "/3）", 2500);
+                    showStatus("网络波动，重试中（" + errN + "/3，" + e.getErrorCodeName().replace("ERROR_CODE_", "") + "）", 2500);
                     h.postDelayed(new Runnable() { public void run() { if (player != null) { player.prepare(); player.play(); } } }, 800L * errN);
                     return;
                 }

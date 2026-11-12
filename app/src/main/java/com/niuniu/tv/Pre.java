@@ -170,7 +170,8 @@ public class Pre {
             if (isList(s.uri)) cur = direct;
             else {
                 long t = s.uri.getScheme() != null && s.uri.getScheme().startsWith("http") ? waitLen(s.uri.toString()) : -1;
-                cur = t > 0 ? new Chunked(cached, t) : cached;
+                DataSource g = new Gate(cached);
+                cur = t > 0 ? new Chunked(g, t) : g;
             }
             return cur.open(s);
         }
@@ -178,6 +179,50 @@ public class Pre {
         @Nullable @Override public Uri getUri() { return cur == null ? null : cur.getUri(); }
         @NonNull @Override public Map<String, List<String>> getResponseHeaders() { return cur == null ? java.util.Collections.<String, List<String>>emptyMap() : cur.getResponseHeaders(); }
         @Override public void close() throws IOException { if (cur != null) cur.close(); }
+    }
+
+    /** 播放器读分片前先过这道门：后台在管这一片，就让它插队下载，等它整片落盘再从磁盘读，播放器自己不连片源 */
+    static class Gate implements DataSource {
+        final DataSource in;
+        Gate(DataSource in) { this.in = in; }
+        @Override public void addTransferListener(@NonNull TransferListener t) { in.addTransferListener(t); }
+        @Override public long open(@NonNull DataSpec s) throws IOException { await(s); return in.open(s); }
+        @Override public int read(@NonNull byte[] b, int o, int l) throws IOException { return in.read(b, o, l); }
+        @Nullable @Override public Uri getUri() { return in.getUri(); }
+        @NonNull @Override public Map<String, List<String>> getResponseHeaders() { return in.getResponseHeaders(); }
+        @Override public void close() throws IOException { in.close(); }
+    }
+
+    /**
+     * 等后台把播放器要的这一片下到磁盘。后台不管这片（直播、不能分段的整文件、列表还没解析出来）就直接放行，
+     * 照旧由播放器自己拉。片源真坏了这里只会一直等，由播放页的「没数据就换源」兜底；最多等 2 分钟。
+     */
+    static void await(DataSpec s) throws IOException {
+        String key = s.key != null ? s.key : s.uri.toString();
+        long t0 = SystemClock.uptimeMillis();
+        Seg g = null; Job j0 = null;
+        try {
+            while (true) {
+                Job j = job;
+                if (j == null || j.dead || (j0 != null && j != j0)) return;
+                long now = SystemClock.uptimeMillis();
+                if (g == null) {
+                    if (!j.keys.contains(key)) {
+                        if (j.segs.isEmpty() && !j.url.equals(key) && now - t0 < 4000) { Thread.sleep(50); continue; }
+                        return;
+                    }
+                    g = j.find(key, s.position);
+                    if (g == null) return;
+                    j0 = j;
+                }
+                if (onDisk(g)) return;
+                if (now - t0 > 120_000L) return;
+                j.want(g);
+                Thread.sleep(40);
+            }
+        } catch (InterruptedException e) {
+            throw new java.io.InterruptedIOException();
+        } finally { if (g != null && j0 != null) j0.wants.remove(g); }
     }
 
     /** 开始（或继续）缓存某一集。同一地址只更新位置与领先量，不重来。 */
@@ -210,6 +255,7 @@ public class Pre {
             // 正在下的分片不是眼前要用的（比如刚快进），立刻停下让路
             for (Map.Entry<Seg, CacheWriter> e : job.active.entrySet()) {
                 Seg c = e.getKey();
+                if (job.wants.containsKey(c)) continue;
                 if (c.endUs <= p || c.startUs > p + NEAR_US) e.getValue().cancel();
             }
         }
@@ -311,6 +357,8 @@ public class Pre {
         volatile boolean dead, gated, ready, everReady, crowded;
         int rejects; long rejectAt;
         volatile int lanes = WORKERS;
+        /** 播放器正在等的分片，最先下 */
+        final java.util.concurrent.ConcurrentHashMap<Seg, Boolean> wants = new java.util.concurrent.ConcurrentHashMap<>();
         final java.util.concurrent.ConcurrentHashMap<Seg, CacheWriter> active = new java.util.concurrent.ConcurrentHashMap<>();
         final List<Thread> helpers = new ArrayList<>();
         volatile List<Seg> segs = new ArrayList<>();
@@ -320,6 +368,29 @@ public class Pre {
             super("nn-pre");
             this.url = url; posUs = Math.max(0, posMs) * 1000; aheadUs = aheadMs * 1000;
             setPriority(Thread.MIN_PRIORITY + 1);
+            if (app != null && isCrowdHost(app, url)) lanes = 2;   // 记过嫌连接多的站，一开始就少开几路
+        }
+
+        /** 找播放器要读的那一片：同地址、起点落在这一片里 */
+        Seg find(String key, long pos) {
+            for (Seg s : segs) {
+                if (!s.key.equals(key)) continue;
+                long st = s.spec.position, len = s.spec.length;
+                if (len == C.LENGTH_UNSET || (pos >= st && pos < st + len)) return s;
+            }
+            return null;
+        }
+
+        /** 播放器在等这一片：插到最前；之前因失败跳过的，重新下 */
+        synchronized void want(Seg g) {
+            if (wants.put(g, Boolean.TRUE) != null) return;
+            if (g.done && !g.busy && !onDisk(g)) { g.done = false; g.fails = 0; }
+            // 各路都在忙后面的分片：停掉最靠后的那路，先给播放器下这一片
+            if (g.busy || active.size() < lanes) return;
+            Seg far = null;
+            for (Seg c : active.keySet()) if (!wants.containsKey(c) && (far == null || c.startUs > far.startUs)) far = c;
+            CacheWriter w = far == null ? null : active.get(far);
+            if (w != null) { far.fails--; w.cancel(); }
         }
 
         void halt() {
@@ -469,8 +540,9 @@ public class Pre {
                     if (dead) break;
                     if (rejected(e)) onReject(cur);
                     else if (gated && !ready) { sleepQ(300); continue; }   // 被播放器让路取消的，不算失败
-                    synchronized (this) { if (++cur.fails >= 3) cur.done = true; }   // 一个分片连失败 3 次就跳过，交给播放器自己拉
-                    if (!cur.done) sleepQ(1000L * cur.fails);
+                    // 一个分片连失败 3 次先跳过；播放器真要读它时会再插队重下，不放弃
+                    synchronized (this) { if (++cur.fails >= 3 && !wants.containsKey(cur)) cur.done = true; }
+                    if (!cur.done) sleepQ(Math.min(5000L, 1000L * cur.fails));
                 } finally { active.remove(cur); cur.busy = false; }
             }
         }
@@ -497,19 +569,15 @@ public class Pre {
 
         /** 选下一个要下载的分片：初始化段优先，其次从播放位置往后、在领先窗口内第一个没下载的 */
         synchronized Seg pick() {
-            long p = posUs, lim = p + aheadUs, ahead = 0, from = p;
-            boolean near = false;
-            if (gated) {
-                if (!everReady || !ready || bufUs - p < 15_000_000L) {
-                    // 起播前、卡顿或缓冲不足：播放器自己拉眼前这一段，我们并行帮它拉后面 30 秒
-                    near = true; lim = p + NEAR_US;
-                } else from = bufUs;   // 播放器手里已有的不重复拉，从它缓冲的尽头往后下
-            }
-            for (Seg s : segs) if (s.startUs < 0 && !s.done && !s.busy) { if (gated) return null; s.busy = true; return s; }
+            long p = posUs, lim = p + aheadUs, ahead = 0;
+            // 播放器在等的分片最先下（播放器只读磁盘，不自己连片源）
+            for (Seg s : wants.keySet()) if (!s.done && !s.busy) { s.busy = true; return s; }
+            // 起播前、卡顿或缓冲不足：先集中下眼前 30 秒
+            if (gated && (!everReady || !ready || bufUs - p < 15_000_000L)) lim = p + NEAR_US;
+            for (Seg s : segs) if (s.startUs < 0 && !s.done && !s.busy) { s.busy = true; return s; }
             for (Seg s : segs) {
-                if (s.startUs < 0 || s.endUs <= from) continue;
+                if (s.startUs < 0 || s.endUs <= p) continue;
                 if (s.startUs >= lim) return null;
-                if (near && s.startUs <= p) continue;   // 眼前这段留给播放器
                 if (!s.done && !s.busy) {
                     if (ahead > capBytes * 6 / 10) return null;
                     s.busy = true; return s;
