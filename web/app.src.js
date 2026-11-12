@@ -769,14 +769,16 @@ const PAGES = {
       // cid 0 是联想词条（首字母/全拼常命中这种，如 wdxdjsl→我的兄弟叫顺溜），没有海报，带「电视剧/电影」标签的也要
       // 标签可能带后缀，如「电影·预告」（ads→奥德赛），按前缀认
       const TAGS = { "电影": 1, "电视剧": 2, "动漫": 4, "综艺": 6 };
-      const seen = {}, out = [];
+      // 不带标签的联想词（如 rsfb→人生复本）不丢，放进「建议」，选中再按片名搜
+      const seen = {}, out = [], words = [], wseen = {};
+      const addWord = n => { const k = n.replace(/\s+/g, ""); if (k && !wseen[k]) { wseen[k] = 1; words.push(n.trim()); } };
       (d.data || []).forEach(x => {
         if (!x.name) return;
         let cid = x.cid;
         let yr = x.year || "";
         if (!cid) {
           const pe = x.presentation_element || {};
-          const t = (pe.tags || []).map(g => String(g.name || "").split("·")[0]).find(n => TAGS[n]); if (!t) return; cid = TAGS[t];
+          const t = (pe.tags || []).map(g => String(g.name || "").split("·")[0]).find(n => TAGS[n]); if (!t) { addWord(x.name); return; } cid = TAGS[t];
           const ym = /^((?:19|20)\d\d)\//.exec(pe.show_reason || ""); yr = ym ? ym[1] : "";   // 联想词条的 year 常是假的 2010，以简介里的年份为准
           if (!x.picture_url && pe.picture_url) x.picture_url = pe.picture_url;
         }
@@ -793,10 +795,11 @@ const PAGES = {
         if (hit) Object.assign(it, { id: hit.id, type: hit.type, year: hit.year || it.year, pic: hit.pic || it.pic });
       }).catch(() => {}));
       if (fill.length) await Promise.race([Promise.all(fill), sleep(3500)]);
-      return items;
+      return { items, words: words.filter(w => !seen[w.replace(/\s+/g, "")]).slice(0, 12) };
     };
     // 联想结果没有豆瓣 id：点开时先去豆瓣按片名+年份找，找不到也能直接按片名找片源
-    const bindIq = items => $$("#sres .card").forEach((c, i) => {
+    const bindIq = items => bindIqTo($$("#sres .card"), items);
+    const bindIqTo = (cards, items) => cards.forEach((c, i) => {
       const it = items[i];
       c._ok = async () => {
         if (it.id) { openDetail(it); return; }
@@ -814,8 +817,9 @@ const PAGES = {
       $("#sh").textContent = "搜索结果"; $("#ss").textContent = "";
       $("#sres").innerHTML = `<div class="grid">${skel(5)}</div>`;
       try {
-        let items = [], iq = false;
-        if (isLetters(v)) { try { items = await iqSuggest(v); iq = items.length > 0; } catch (e) {} }
+        let items = [], iq = false, words = [];
+        if (isLetters(v)) { try { const r = await iqSuggest(v); items = r.items; words = r.words; iq = items.length > 0; } catch (e) {} }
+        if (words.length) { if (tok !== routeTok || me !== my) return; showWords(words, items, me); return; }
         if (!items.length) items = (await dbSearch(v)).map(it => Object.assign(it, { sub: String(it.sub).split(" / ")[0] }));
         if (tok !== routeTok || me !== my) return;
         $("#ss").textContent = "";
@@ -823,6 +827,35 @@ const PAGES = {
         bindCards($("#sres"));
         if (iq) bindIq(items);
       } catch (e) { if (me === my) $("#sres").innerHTML = `<div class="empty">搜索失败，稍后再试</div>`; }
+    };
+    // 按片名搜（建议词）：豆瓣有就出海报；没有也给一张卡，点开直接按片名找片源
+    const byName = async w => {
+      let r = [];
+      try { r = (await dbSearch(w)).map(it => Object.assign(it, { sub: String(it.sub).split(" / ")[0] })); } catch (e) {}
+      const k = w.replace(/\s+/g, "");
+      r.sort((a, b) => (b.title.replace(/\s+/g, "") === k) - (a.title.replace(/\s+/g, "") === k));
+      return r.length ? r : [{ id: "", type: "movie", title: w, pic: "", year: "", sub: "按片名找片源" }];
+    };
+    // 「建议」一行：联想词做成可选的标签；上面是带海报的结果，下面是选中词的豆瓣结果（默认选第一个）
+    const showWords = (words, tagged, me) => {
+      $("#ss").textContent = "";
+      $("#sres").innerHTML = `<div class="chips sug" data-g="sug"><span class="sugh">建议</span>${words.map((w, i) => `<div class="chip f${i ? "" : " on"}" data-i="${i}">${esc(w)}</div>`).join("")}</div><div id="sgrid"></div>`;
+      let cur = -1, pend = 0;
+      const pick = async i => {
+        if (i === cur) return;
+        cur = i; const n = ++pend;
+        $$("#sres .sug .chip").forEach(c => c.classList.toggle("on", +c.dataset.i === i));
+        $("#sgrid").innerHTML = `<div class="grid">${skel(5)}</div>`;
+        const r = await byName(words[i]);
+        if (n !== pend || me !== my || tok !== routeTok) return;
+        const all = tagged.concat(r.filter(x => !tagged.some(t => t.title === x.title && (!t.year || !x.year || t.year == x.year))));
+        $("#sgrid").innerHTML = grid(all);
+        bindCards($("#sgrid"));
+        $$("#sgrid .card").forEach((c, k) => { const it = all[k]; if (!it.id) c._ok = () => openDetail({ id: "", type: it.type, title: it.title, year: it.year, pic: it.pic }); });
+        if (tagged.length) bindIqTo($$("#sgrid .card").slice(0, tagged.length), tagged);
+      };
+      $$("#sres .sug .chip").forEach(c => { c._ok = () => pick(+c.dataset.i); });
+      pick(0);
     };
     const hot = () => {
       $("#sh").textContent = "大家都在看"; $("#ss").textContent = "";

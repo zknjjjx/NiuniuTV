@@ -1201,7 +1201,14 @@ const PAGES = {
     const iqSuggest = (v) => __async(this, null, function* () {
       const d = yield getJSON(`https://suggest.video.iqiyi.com/?if=mobile&key=${encodeURIComponent(v)}`, null, 6e3);
       const TAGS = { "\u7535\u5F71": 1, "\u7535\u89C6\u5267": 2, "\u52A8\u6F2B": 4, "\u7EFC\u827A": 6 };
-      const seen = {}, out = [];
+      const seen = {}, out = [], words = [], wseen = {};
+      const addWord = (n) => {
+        const k = n.replace(/\s+/g, "");
+        if (k && !wseen[k]) {
+          wseen[k] = 1;
+          words.push(n.trim());
+        }
+      };
       (d.data || []).forEach((x) => {
         if (!x.name) return;
         let cid = x.cid;
@@ -1209,7 +1216,10 @@ const PAGES = {
         if (!cid) {
           const pe = x.presentation_element || {};
           const t = (pe.tags || []).map((g) => String(g.name || "").split("\xB7")[0]).find((n) => TAGS[n]);
-          if (!t) return;
+          if (!t) {
+            addWord(x.name);
+            return;
+          }
           cid = TAGS[t];
           const ym = /^((?:19|20)\d\d)\//.exec(pe.show_reason || "");
           yr = ym ? ym[1] : "";
@@ -1232,9 +1242,10 @@ const PAGES = {
       }).catch(() => {
       }));
       if (fill.length) yield Promise.race([Promise.all(fill), sleep(3500)]);
-      return items;
+      return { items, words: words.filter((w) => !seen[w.replace(/\s+/g, "")]).slice(0, 12) };
     });
-    const bindIq = (items) => $$("#sres .card").forEach((c, i) => {
+    const bindIq = (items) => bindIqTo($$("#sres .card"), items);
+    const bindIqTo = (cards, items) => cards.forEach((c, i) => {
       const it = items[i];
       c._ok = () => __async(this, null, function* () {
         if (it.id) {
@@ -1260,13 +1271,20 @@ const PAGES = {
       $("#ss").textContent = "";
       $("#sres").innerHTML = `<div class="grid">${skel(5)}</div>`;
       try {
-        let items = [], iq = false;
+        let items = [], iq = false, words = [];
         if (isLetters(v)) {
           try {
-            items = yield iqSuggest(v);
+            const r = yield iqSuggest(v);
+            items = r.items;
+            words = r.words;
             iq = items.length > 0;
           } catch (e) {
           }
+        }
+        if (words.length) {
+          if (tok !== routeTok || me !== my) return;
+          showWords(words, items, me);
+          return;
         }
         if (!items.length) items = (yield dbSearch(v)).map((it) => Object.assign(it, { sub: String(it.sub).split(" / ")[0] }));
         if (tok !== routeTok || me !== my) return;
@@ -1278,6 +1296,42 @@ const PAGES = {
         if (me === my) $("#sres").innerHTML = `<div class="empty">\u641C\u7D22\u5931\u8D25\uFF0C\u7A0D\u540E\u518D\u8BD5</div>`;
       }
     });
+    const byName = (w) => __async(this, null, function* () {
+      let r = [];
+      try {
+        r = (yield dbSearch(w)).map((it) => Object.assign(it, { sub: String(it.sub).split(" / ")[0] }));
+      } catch (e) {
+      }
+      const k = w.replace(/\s+/g, "");
+      r.sort((a, b) => (b.title.replace(/\s+/g, "") === k) - (a.title.replace(/\s+/g, "") === k));
+      return r.length ? r : [{ id: "", type: "movie", title: w, pic: "", year: "", sub: "\u6309\u7247\u540D\u627E\u7247\u6E90" }];
+    });
+    const showWords = (words, tagged, me) => {
+      $("#ss").textContent = "";
+      $("#sres").innerHTML = `<div class="chips sug" data-g="sug"><span class="sugh">\u5EFA\u8BAE</span>${words.map((w, i) => `<div class="chip f${i ? "" : " on"}" data-i="${i}">${esc(w)}</div>`).join("")}</div><div id="sgrid"></div>`;
+      let cur = -1, pend = 0;
+      const pick = (i) => __async(this, null, function* () {
+        if (i === cur) return;
+        cur = i;
+        const n = ++pend;
+        $$("#sres .sug .chip").forEach((c) => c.classList.toggle("on", +c.dataset.i === i));
+        $("#sgrid").innerHTML = `<div class="grid">${skel(5)}</div>`;
+        const r = yield byName(words[i]);
+        if (n !== pend || me !== my || tok !== routeTok) return;
+        const all = tagged.concat(r.filter((x) => !tagged.some((t) => t.title === x.title && (!t.year || !x.year || t.year == x.year))));
+        $("#sgrid").innerHTML = grid(all);
+        bindCards($("#sgrid"));
+        $$("#sgrid .card").forEach((c, k) => {
+          const it = all[k];
+          if (!it.id) c._ok = () => openDetail({ id: "", type: it.type, title: it.title, year: it.year, pic: it.pic });
+        });
+        if (tagged.length) bindIqTo($$("#sgrid .card").slice(0, tagged.length), tagged);
+      });
+      $$("#sres .sug .chip").forEach((c) => {
+        c._ok = () => pick(+c.dataset.i);
+      });
+      pick(0);
+    };
     const hot = () => {
       $("#sh").textContent = "\u5927\u5BB6\u90FD\u5728\u770B";
       $("#ss").textContent = "";
