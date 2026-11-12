@@ -1010,7 +1010,6 @@ const PAGES = {
         $$(`.chip[data-r="${ri}"]`, l).forEach((x) => x.classList.toggle("on", x === c));
       };
       $$(".frow .chip", l).forEach((c) => {
-        c._onfocus = () => sel(c);
         c._ok = () => sel(c);
       });
       $("#fClr")._ok = () => {
@@ -1731,7 +1730,7 @@ document.addEventListener("keydown", (e) => {
         const t1 = dir === "down" ? Math.min.apply(null, same.map((c) => c.getBoundingClientRect().top)) : Math.max.apply(null, same.map((c) => c.getBoundingClientRect().top));
         const line = same.filter((c) => Math.abs(c.getBoundingClientRect().top - t1) < 4), cx = b0.left + b0.width / 2;
         line.sort((a, b) => Math.abs(a.getBoundingClientRect().left + a.getBoundingClientRect().width / 2 - cx) - Math.abs(b.getBoundingClientRect().left + b.getBoundingClientRect().width / 2 - cx));
-        F.set(line[0]);
+        F.set(line[0], true);
       } else if (j >= 0 && j < rows.length) F.set($(".chip.on", rows[j]) || $(".chip", rows[j]), true);
       else if (j === rows.length) F.set($("#fOk"));
       else if (j < 0 && !r) F.set($(".chip.on", rows[rows.length - 1]), true);

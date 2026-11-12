@@ -648,7 +648,7 @@ const PAGES = {
         <div class="acts" data-g="facts"><div class="btn f" id="fClr">清空</div><div class="btn pri f" id="fOk">确定</div></div></div>`, ".frow .chip.on");
       const l = $("#layer");
       const sel = c => { const ri = +c.dataset.r; v[ri] = c.dataset.v; $$(`.chip[data-r="${ri}"]`, l).forEach(x => x.classList.toggle("on", x === c)); };
-      $$(".frow .chip", l).forEach(c => { c._onfocus = () => sel(c); c._ok = () => sel(c); });
+      $$(".frow .chip", l).forEach(c => { c._ok = () => sel(c); });   // 只有按 OK 才选中，焦点走到哪都不改选择
       $("#fClr")._ok = () => { const d0 = fDefault(key); d0.forEach((x, i) => { v[i] = x; }); $$(".frow .chip", l).forEach(c => c.classList.toggle("on", c.dataset.v === v[+c.dataset.r])); };
       $("#fOk")._ok = closeLayer;
       l._onclose = () => {   // 关面板（确定或返回键）时才刷新，面板里挑来挑去不重载
@@ -1084,7 +1084,7 @@ document.addEventListener("keydown", e => {
     const ri = ring ? ring.indexOf(before) : -1;
     if (ri >= 0 && ring.length > 1 && (dir === "right" ? ri === ring.length - 1 : ri === 0)) {  // 一级、二级菜单到头了再按：绕到另一头
       F.set(ring[dir === "right" ? 0 : ring.length - 1]);
-    } else if ((dir === "up" || dir === "down") && before && before.closest(".fpanel")) {  // 筛选面板：上下换行时落在那一行已选的项上，不改别行
+    } else if ((dir === "up" || dir === "down") && before && before.closest(".fpanel")) {  // 筛选面板：上下换行时落在那一行已选的项上；走焦点从不改选择
       const p = before.closest(".fpanel"), rows = $$(".frow", p), r = before.closest(".frow"), i = r ? rows.indexOf(r) : rows.length;
       const j = i + (dir === "down" ? 1 : -1), b0 = before.getBoundingClientRect();
       // 一行选项太多折成两行时，先在本行的上下两排之间走
@@ -1093,7 +1093,7 @@ document.addEventListener("keydown", e => {
         const t1 = dir === "down" ? Math.min.apply(null, same.map(c => c.getBoundingClientRect().top)) : Math.max.apply(null, same.map(c => c.getBoundingClientRect().top));
         const line = same.filter(c => Math.abs(c.getBoundingClientRect().top - t1) < 4), cx = b0.left + b0.width / 2;
         line.sort((a, b) => Math.abs(a.getBoundingClientRect().left + a.getBoundingClientRect().width / 2 - cx) - Math.abs(b.getBoundingClientRect().left + b.getBoundingClientRect().width / 2 - cx));
-        F.set(line[0]);
+        F.set(line[0], true);
       } else
       if (j >= 0 && j < rows.length) F.set($(".chip.on", rows[j]) || $(".chip", rows[j]), true);
       else if (j === rows.length) F.set($("#fOk"));
