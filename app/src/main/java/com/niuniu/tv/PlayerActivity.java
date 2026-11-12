@@ -858,7 +858,6 @@ public class PlayerActivity extends Activity {
                 try {
                     Integer i;
                     while (!gone && (i = probeQ.poll()) != null) {
-                        for (int w = 0; w < 120 && !gone && !calm(); w++) { try { Thread.sleep(1000); } catch (InterruptedException e) { return; } }
                         if (gone) return;
                         final int k = i;
                         String url;
@@ -907,16 +906,6 @@ public class PlayerActivity extends Activity {
             a.kickProbe();
             a.refreshPanel();
         } catch (Exception ignore) {}
-    }
-    /** 播放顺：已起播、缓存领先 30 秒以上 */
-    private boolean calm() {
-        try {
-            final long[] pos = {-1};
-            final java.util.concurrent.CountDownLatch l = new java.util.concurrent.CountDownLatch(1);
-            h.post(new Runnable() { public void run() { pos[0] = player == null ? -1 : player.getCurrentPosition(); l.countDown(); } });
-            l.await(2, java.util.concurrent.TimeUnit.SECONDS);
-            return pos[0] >= 0 && Pre.cachedAheadMs(curUrl, pos[0]) >= 30000;
-        } catch (Exception e) { return false; }
     }
     private boolean panelOn() { return panel != null && panel.getVisibility() == View.VISIBLE; }
 

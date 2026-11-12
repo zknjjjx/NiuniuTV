@@ -572,8 +572,6 @@ public class Pre {
             long p = posUs, lim = p + aheadUs, ahead = 0;
             // 播放器在等的分片最先下（播放器只读磁盘，不自己连片源）
             for (Seg s : wants.keySet()) if (!s.done && !s.busy) { s.busy = true; return s; }
-            // 起播前、卡顿或缓冲不足：先集中下眼前 30 秒
-            if (gated && (!everReady || !ready || bufUs - p < 15_000_000L)) lim = p + NEAR_US;
             for (Seg s : segs) if (s.startUs < 0 && !s.done && !s.busy) { s.busy = true; return s; }
             for (Seg s : segs) {
                 if (s.startUs < 0 || s.endUs <= p) continue;
