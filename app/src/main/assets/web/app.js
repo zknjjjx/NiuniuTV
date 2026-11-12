@@ -151,9 +151,9 @@ const picOf = (i) => {
   return p.normal || p.large || i.cover_url || i.cover && i.cover.url || "";
 };
 const dbItem = (i) => ({ id: i.id, title: i.title, pic: picOf(i), rate: i.rating && i.rating.value || "", sub: i.card_subtitle || "", ep: i.episodes_info || "", type: i.type === "tv" ? "tv" : "movie", year: i.year || "" });
-function dbList(kind, cat, type, start, count) {
+function dbList(kind, cat, type, start, count, sort) {
   return __async(this, null, function* () {
-    const path = cat === "rec" ? `${kind}/recommend?start=${start}&count=${count}&tags=${encodeURIComponent(type)}` : `subject/recent_hot/${kind}?category=${encodeURIComponent(cat)}&type=${encodeURIComponent(type)}&start=${start}&limit=${count}`;
+    const path = cat === "rec" ? `${kind}/recommend?start=${start}&count=${count}&tags=${encodeURIComponent(type)}${sort ? "&sort=" + sort : ""}` : `subject/recent_hot/${kind}?category=${encodeURIComponent(cat)}&type=${encodeURIComponent(type)}&start=${start}&limit=${count}`;
     const d = yield dbGet(path);
     return { items: (d.items || []).filter((i) => (i.type === "movie" || i.type === "tv") && i.id).map(dbItem), total: d.total || 0 };
   });
@@ -772,11 +772,61 @@ const HOME_ROWS = [
   ["\u7EAA\u5F55\u7247", "tv", "tv", "tv_documentary"]
 ];
 const CHIPS = {
-  movie: [["\u70ED\u95E8", "movie", "\u70ED\u95E8", "\u5168\u90E8"], ["\u6700\u65B0", "movie", "\u6700\u65B0", "\u5168\u90E8"], ["\u9AD8\u5206", "movie", "\u8C46\u74E3\u9AD8\u5206", "\u5168\u90E8"], ["\u51B7\u95E8\u4F73\u7247", "movie", "\u51B7\u95E8\u4F73\u7247", "\u5168\u90E8"], ["\u534E\u8BED", "movie", "\u70ED\u95E8", "\u534E\u8BED"], ["\u6B27\u7F8E", "movie", "\u70ED\u95E8", "\u6B27\u7F8E"], ["\u97E9\u56FD", "movie", "\u70ED\u95E8", "\u97E9\u56FD"], ["\u65E5\u672C", "movie", "\u70ED\u95E8", "\u65E5\u672C"]],
-  tv: [["\u7EFC\u5408", "tv", "tv", "tv"], ["\u56FD\u4EA7\u5267", "tv", "tv", "tv_domestic"], ["\u6B27\u7F8E\u5267", "tv", "tv", "tv_american"], ["\u97E9\u5267", "tv", "tv", "tv_korean"], ["\u65E5\u5267", "tv", "tv", "tv_japanese"], ["\u6E2F\u5267", "tv", "rec", "\u7535\u89C6\u5267,\u9999\u6E2F"], ["\u7EAA\u5F55\u7247", "tv", "tv", "tv_documentary"]],
-  anime: [["\u70ED\u64AD", "tv", "tv", "tv_animation"], ["\u65E5\u6F2B", "tv", "rec", "\u52A8\u753B,\u65E5\u672C"], ["\u56FD\u6F2B", "tv", "rec", "\u52A8\u753B,\u4E2D\u56FD\u5927\u9646"], ["\u6B27\u7F8E\u52A8\u753B", "tv", "rec", "\u52A8\u753B,\u7F8E\u56FD"], ["\u52A8\u753B\u7535\u5F71", "movie", "rec", "\u52A8\u753B"]],
-  show: [["\u7EFC\u5408", "tv", "show", "show"], ["\u56FD\u5185", "tv", "show", "show_domestic"], ["\u56FD\u5916", "tv", "show", "show_foreign"], ["\u771F\u4EBA\u79C0", "tv", "rec", "\u7EFC\u827A,\u771F\u4EBA\u79C0"], ["\u8131\u53E3\u79C0", "tv", "rec", "\u7EFC\u827A,\u8131\u53E3\u79C0"], ["\u97F3\u4E50", "tv", "rec", "\u7EFC\u827A,\u97F3\u4E50"]]
+  movie: [["\u70ED\u95E8", "movie", "\u70ED\u95E8", "\u5168\u90E8", ""], ["\u6700\u65B0", "movie", "\u6700\u65B0", "\u5168\u90E8"], ["\u9AD8\u5206", "movie", "\u8C46\u74E3\u9AD8\u5206", "\u5168\u90E8"], ["\u51B7\u95E8\u4F73\u7247", "movie", "\u51B7\u95E8\u4F73\u7247", "\u5168\u90E8"], ["\u534E\u8BED", "movie", "\u70ED\u95E8", "\u534E\u8BED", "\u534E\u8BED"], ["\u6B27\u7F8E", "movie", "\u70ED\u95E8", "\u6B27\u7F8E", "\u6B27\u7F8E"], ["\u97E9\u56FD", "movie", "\u70ED\u95E8", "\u97E9\u56FD", "\u97E9\u56FD"], ["\u65E5\u672C", "movie", "\u70ED\u95E8", "\u65E5\u672C", "\u65E5\u672C"]],
+  tv: [["\u7EFC\u5408", "tv", "tv", "tv", "\u7535\u89C6\u5267"], ["\u56FD\u4EA7\u5267", "tv", "tv", "tv_domestic", "\u7535\u89C6\u5267,\u4E2D\u56FD\u5927\u9646"], ["\u6B27\u7F8E\u5267", "tv", "tv", "tv_american", "\u7535\u89C6\u5267,\u6B27\u7F8E"], ["\u97E9\u5267", "tv", "tv", "tv_korean", "\u7535\u89C6\u5267,\u97E9\u56FD"], ["\u65E5\u5267", "tv", "tv", "tv_japanese", "\u7535\u89C6\u5267,\u65E5\u672C"], ["\u6E2F\u5267", "tv", "rec", "\u7535\u89C6\u5267,\u9999\u6E2F"], ["\u7EAA\u5F55\u7247", "tv", "tv", "tv_documentary", "\u7EAA\u5F55\u7247"]],
+  anime: [["\u70ED\u64AD", "tv", "tv", "tv_animation", "\u52A8\u753B"], ["\u65E5\u6F2B", "tv", "rec", "\u52A8\u753B,\u65E5\u672C"], ["\u56FD\u6F2B", "tv", "rec", "\u52A8\u753B,\u4E2D\u56FD\u5927\u9646"], ["\u6B27\u7F8E\u52A8\u753B", "tv", "rec", "\u52A8\u753B,\u7F8E\u56FD"], ["\u52A8\u753B\u7535\u5F71", "movie", "rec", "\u52A8\u753B"]],
+  show: [["\u7EFC\u5408", "tv", "show", "show", "\u7EFC\u827A"], ["\u56FD\u5185", "tv", "show", "show_domestic", "\u7EFC\u827A,\u4E2D\u56FD\u5927\u9646"], ["\u56FD\u5916", "tv", "show", "show_foreign", "\u7EFC\u827A,\u56FD\u5916"], ["\u771F\u4EBA\u79C0", "tv", "rec", "\u7EFC\u827A,\u771F\u4EBA\u79C0"], ["\u8131\u53E3\u79C0", "tv", "rec", "\u7EFC\u827A,\u8131\u53E3\u79C0"], ["\u97F3\u4E50", "tv", "rec", "\u7EFC\u827A,\u97F3\u4E50"]]
 };
+const YEAR0 = (/* @__PURE__ */ new Date()).getFullYear();
+const F_YEARS = ["\u5168\u90E8", String(YEAR0), String(YEAR0 - 1), "2020\u5E74\u4EE3", "2010\u5E74\u4EE3", "2000\u5E74\u4EE3", "90\u5E74\u4EE3", "80\u5E74\u4EE3", "\u66F4\u65E9"];
+const F_SORTS = [["\u8FD1\u671F\u70ED\u95E8", "U"], ["\u7EFC\u5408", "T"], ["\u9AD8\u5206", "S"], ["\u6700\u65B0\u4E0A\u6620", "R"]];
+const FILTERS = {
+  movie: { base: "", groups: [
+    ["\u7C7B\u578B", ["\u5168\u90E8", "\u5267\u60C5", "\u559C\u5267", "\u7231\u60C5", "\u52A8\u4F5C", "\u79D1\u5E7B", "\u52A8\u753B", "\u60AC\u7591", "\u72AF\u7F6A", "\u60CA\u609A", "\u5192\u9669", "\u5947\u5E7B", "\u6050\u6016", "\u6218\u4E89", "\u5386\u53F2", "\u4F20\u8BB0", "\u6B66\u4FA0", "\u707E\u96BE", "\u97F3\u4E50", "\u6B4C\u821E", "\u897F\u90E8", "\u7EAA\u5F55\u7247"]],
+    ["\u5730\u533A", ["\u5168\u90E8", "\u534E\u8BED", "\u4E2D\u56FD\u5927\u9646", "\u4E2D\u56FD\u9999\u6E2F", "\u4E2D\u56FD\u53F0\u6E7E", "\u6B27\u7F8E", "\u7F8E\u56FD", "\u82F1\u56FD", "\u6CD5\u56FD", "\u5FB7\u56FD", "\u610F\u5927\u5229", "\u897F\u73ED\u7259", "\u97E9\u56FD", "\u65E5\u672C", "\u5370\u5EA6", "\u6CF0\u56FD", "\u4FC4\u7F57\u65AF"]]
+  ] },
+  tv: { base: "\u7535\u89C6\u5267", groups: [
+    ["\u7C7B\u578B", ["\u5168\u90E8", "\u5267\u60C5", "\u7231\u60C5", "\u559C\u5267", "\u60AC\u7591", "\u72AF\u7F6A", "\u5211\u4FA6", "\u8C0D\u6218", "\u53E4\u88C5", "\u6B66\u4FA0", "\u5BB6\u5EAD", "\u90FD\u5E02", "\u9752\u6625", "\u804C\u573A", "\u5386\u53F2", "\u6218\u4E89", "\u5947\u5E7B", "\u79D1\u5E7B", "\u52A8\u4F5C"]],
+    ["\u5730\u533A", ["\u5168\u90E8", "\u534E\u8BED", "\u4E2D\u56FD\u5927\u9646", "\u4E2D\u56FD\u9999\u6E2F", "\u4E2D\u56FD\u53F0\u6E7E", "\u6B27\u7F8E", "\u7F8E\u56FD", "\u82F1\u56FD", "\u97E9\u56FD", "\u65E5\u672C", "\u6CF0\u56FD"]]
+  ] },
+  anime: { base: "\u52A8\u753B", kinds: [["\u5267\u96C6", "tv"], ["\u7535\u5F71", "movie"]], groups: [
+    ["\u7C7B\u578B", ["\u5168\u90E8", "\u70ED\u8840", "\u641E\u7B11", "\u5192\u9669", "\u5947\u5E7B", "\u79D1\u5E7B", "\u604B\u7231", "\u6CBB\u6108", "\u6821\u56ED", "\u8FD0\u52A8"]],
+    ["\u5730\u533A", ["\u5168\u90E8", "\u4E2D\u56FD\u5927\u9646", "\u65E5\u672C", "\u7F8E\u56FD", "\u6B27\u7F8E"]]
+  ] },
+  show: { base: "\u7EFC\u827A", groups: [
+    ["\u7C7B\u578B", ["\u5168\u90E8", "\u771F\u4EBA\u79C0", "\u8131\u53E3\u79C0", "\u97F3\u4E50", "\u559C\u5267", "\u9009\u79C0", "\u6B4C\u821E", "\u65C5\u884C", "\u8BBF\u8C08", "\u63A8\u7406"]],
+    ["\u5730\u533A", ["\u5168\u90E8", "\u4E2D\u56FD\u5927\u9646", "\u4E2D\u56FD\u9999\u6E2F", "\u4E2D\u56FD\u53F0\u6E7E", "\u56FD\u5916", "\u97E9\u56FD", "\u65E5\u672C", "\u7F8E\u56FD"]]
+  ] }
+};
+function fRows(key) {
+  const d = FILTERS[key], rows = [];
+  if (d.kinds) rows.push(["\u5F62\u5F0F", d.kinds]);
+  d.groups.forEach((g) => rows.push([g[0], g[1].map((x) => [x, x])]));
+  rows.push(["\u5E74\u4EE3", F_YEARS.map((x) => [x, x])]);
+  rows.push(["\u6392\u5E8F", F_SORTS]);
+  return rows;
+}
+function fDefault(key) {
+  return fRows(key).map((r) => r[1][0][1]);
+}
+function fSpec(key, v) {
+  const d = FILTERS[key], rows = fRows(key);
+  let kind = key === "movie" ? "movie" : "tv";
+  const tags = d.base ? [d.base] : [];
+  let sort = "U";
+  rows.forEach((r, i) => {
+    if (r[0] === "\u5F62\u5F0F") kind = v[i];
+    else if (r[0] === "\u6392\u5E8F") sort = v[i];
+    else if (v[i] !== "\u5168\u90E8") tags.push(v[i]);
+  });
+  return { kind, tags: tags.join(","), sort };
+}
+function fLabel(key, v) {
+  return fRows(key).map((r, i) => {
+    const o = r[1].find((x) => x[1] === v[i]) || r[1][0];
+    return o[0] === "\u5168\u90E8" ? "\u5168\u90E8" + r[0] : o[0];
+  }).join(" \xB7 ");
+}
 const histAll = () => {
   try {
     return APP ? JSON.parse(NN.history()) : store.get("hist", []);
@@ -867,47 +917,136 @@ const PAGES = {
   cat(tok, key, restore) {
     const chips = CHIPS[key], name = { movie: "\u7535\u5F71", tv: "\u5267\u96C6", anime: "\u52A8\u6F2B", show: "\u7EFC\u827A" }[key];
     let ci = restore ? store.get("chip:" + key, 0) : 0;
-    if (!chips[ci]) ci = 0;
+    if (ci !== "f" && !chips[ci]) ci = 0;
+    let fv = store.get("flt:" + key, null), def = fDefault(key);
+    if (!Array.isArray(fv) || fv.length !== def.length) fv = def.slice();
+    if (ci === "f" && fv.join() === def.join()) ci = 0;
     $("#page").innerHTML = `<div class="scroll" data-pad="6"><div class="pagehead sec cathead"><h2>${name}</h2><span id="cnt" style="display:none"></span>
-      <div class="chips" data-g="chips">${chips.map((c, i) => `<div class="chip f${i === ci ? " on" : ""}" data-i="${i}">${c[0]}</div>`).join("")}</div></div>
+      <div class="chips" data-g="chips">${chips.map((c, i) => `<div class="chip f${i === ci ? " on" : ""}" data-i="${i}">${c[0]}</div>`).join("")}<div class="chip f fchip${ci === "f" ? " on" : ""}" data-i="f">\u7B5B\u9009</div></div></div>
+      <div class="fsum" id="fsum"></div>
       <div class="grid" id="grid">${skel(14)}</div></div>`;
-    const grid = $("#grid");
-    let start = 0, busy = false, end = false, my = 0;
+    const grid = $("#grid"), seen = {};
+    let start = 0, start2 = 0, phase = 0, busy = false, end = false, my = 0;
+    const sum = () => {
+      const e = $("#fsum");
+      e.textContent = ci === "f" ? fLabel(key, fv) : "";
+      e.style.display = ci === "f" ? "" : "none";
+    };
+    const src = () => {
+      if (ci === "f") {
+        const f = fSpec(key, fv);
+        return { kind: f.kind, cat: "rec", type: f.tags, sort: f.sort };
+      }
+      const c = chips[ci];
+      if (phase === 1) return { kind: c[1], cat: "rec", type: c[4], sort: "U" };
+      return { kind: c[1], cat: c[2], type: c[3], sort: "" };
+    };
     const load = (first) => __async(this, null, function* () {
       if (busy || end) return;
       busy = true;
-      const c = chips[ci], me = ++my;
+      const me = ++my, q = src(), ph = phase;
       try {
-        const d = yield dbList(c[1], c[2], c[3], start, 28);
+        const d = yield dbList(q.kind, q.cat, q.type, ph === 1 ? start2 : start, 28, q.sort);
         if (tok !== routeTok || me !== my) return;
         if (first) grid.innerHTML = "";
-        grid.insertAdjacentHTML("beforeend", d.items.map((it) => card(Object.assign(it, { type: c[1] === "tv" ? "tv" : it.type }), { sub: short(it.sub).split(" \xB7 ")[0] || it.ep, cls: "grid-item" })).join(""));
-        bindCards(grid, (el) => {
-          const items = $$(".card", grid);
-          if (items.indexOf(el) > items.length - 15) load();
+        const got = d.items.length;
+        const items = d.items.filter((it) => {
+          const k = it.id;
+          if (seen[k]) return false;
+          seen[k] = 1;
+          return true;
         });
-        start += d.items.length;
-        end = !d.items.length || d.total && start >= d.total;
+        grid.insertAdjacentHTML("beforeend", items.map((it) => card(Object.assign(it, { type: q.kind === "tv" ? "tv" : it.type }), { sub: short(it.sub).split(" \xB7 ")[0] || it.ep, cls: "grid-item" })).join(""));
+        bindCards(grid, (el) => {
+          const all = $$(".card", grid);
+          if (all.indexOf(el) > all.length - 15) load();
+        });
+        if (ph === 1) start2 += got;
+        else start += got;
+        const done = !got || d.total && (ph === 1 ? start2 : start) >= d.total;
+        const c = ci === "f" ? null : chips[ci];
+        if (done && ph === 0 && c && c[4] != null) {
+          phase = 1;
+          end = false;
+        } else end = done;
         $("#cnt").textContent = "";
-        if (first && !d.items.length) grid.innerHTML = `<div class="empty">\u6682\u65E0\u5185\u5BB9</div>`;
+        if (first && !grid.children.length) grid.innerHTML = `<div class="empty">\u6682\u65E0\u5185\u5BB9</div>`;
+        busy = false;
+        if (!end && (!items.length || ph === 0 && phase === 1) && grid.children.length < 28) load();
+        return;
       } catch (e) {
         if (first) grid.innerHTML = `<div class="empty">\u8C46\u74E3\u6570\u636E\u52A0\u8F7D\u5931\u8D25</div>`;
       }
       busy = false;
     });
-    const pick = (ch) => {
-      if (+ch.dataset.i === ci) return;
-      ci = +ch.dataset.i;
-      store.set("chip:" + key, ci);
-      $$(".chip").forEach((x) => x.classList.toggle("on", x === ch));
+    const reload = () => {
+      Object.keys(seen).forEach((k) => delete seen[k]);
       start = 0;
+      start2 = 0;
+      phase = 0;
       end = false;
       busy = false;
       my++;
       grid.innerHTML = skel(14);
+      sum();
       load(true);
     };
+    const mark = () => $$("#page .chips .chip").forEach((x) => x.classList.toggle("on", x.dataset.i === String(ci)));
+    const pick = (ch) => {
+      if (ch.dataset.i === String(ci)) return;
+      ci = +ch.dataset.i;
+      store.set("chip:" + key, ci);
+      mark();
+      reload();
+    };
+    const openF = (fch) => {
+      const rows = fRows(key), v = fv.slice();
+      openLayer(`<div class="panel fpanel"><h2>\u7B5B\u9009${name}</h2>${rows.map((r, ri) => `<div class="frow"><span class="fh">${r[0]}</span><div class="chips" data-g="fr${ri}">${r[1].map((o) => `<div class="chip f${o[1] === v[ri] ? " on" : ""}" data-r="${ri}" data-v="${esc(o[1])}">${esc(o[0])}</div>`).join("")}</div></div>`).join("")}
+        <div class="acts" data-g="facts"><div class="btn f" id="fClr">\u6E05\u7A7A</div><div class="btn pri f" id="fOk">\u786E\u5B9A</div></div></div>`, ".frow .chip.on");
+      const l = $("#layer");
+      const sel = (c) => {
+        const ri = +c.dataset.r;
+        v[ri] = c.dataset.v;
+        $$(`.chip[data-r="${ri}"]`, l).forEach((x) => x.classList.toggle("on", x === c));
+      };
+      $$(".frow .chip", l).forEach((c) => {
+        c._onfocus = () => sel(c);
+        c._ok = () => sel(c);
+      });
+      $("#fClr")._ok = () => {
+        const d0 = fDefault(key);
+        d0.forEach((x, i) => {
+          v[i] = x;
+        });
+        $$(".frow .chip", l).forEach((c) => c.classList.toggle("on", c.dataset.v === v[+c.dataset.r]));
+      };
+      $("#fOk")._ok = closeLayer;
+      l._onclose = () => {
+        const isDef = v.join() === def.join(), was = ci;
+        fv = v.slice();
+        store.set("flt:" + key, fv);
+        if (isDef) {
+          if (was !== "f") return;
+          ci = 0;
+        } else {
+          if (was === "f" && grid._fv === fv.join()) return;
+          ci = "f";
+        }
+        grid._fv = fv.join();
+        store.set("chip:" + key, ci);
+        mark();
+        reload();
+        l._prev = $("#page .chip.on") || fch;
+      };
+    };
     $$(".chip", $("#page")).forEach((ch) => {
+      if (ch.dataset.i === "f") {
+        ch._ok = () => {
+          clearTimeout(pick._t);
+          openF(ch);
+        };
+        return;
+      }
       ch._onfocus = () => {
         clearTimeout(pick._t);
         pick._t = setTimeout(() => {
@@ -921,8 +1060,10 @@ const PAGES = {
         if (c) F.set(c);
       };
     });
-    F.set($(".chip.on"));
+    if (ci === "f") grid._fv = fv.join();
+    F.set($("#page .chip.on"));
     $("#page")._more = () => load();
+    sum();
     load(true);
   },
   detail(tok, it, restore) {
@@ -1579,6 +1720,21 @@ document.addEventListener("keydown", (e) => {
     const ri = ring ? ring.indexOf(before) : -1;
     if (ri >= 0 && ring.length > 1 && (dir === "right" ? ri === ring.length - 1 : ri === 0)) {
       F.set(ring[dir === "right" ? 0 : ring.length - 1]);
+    } else if ((dir === "up" || dir === "down") && before && before.closest(".fpanel")) {
+      const p = before.closest(".fpanel"), rows = $$(".frow", p), r = before.closest(".frow"), i = r ? rows.indexOf(r) : rows.length;
+      const j = i + (dir === "down" ? 1 : -1), b0 = before.getBoundingClientRect();
+      const same = r ? $$(".chip", r).filter((c) => {
+        const t = c.getBoundingClientRect().top;
+        return dir === "down" ? t > b0.top + 4 : t < b0.top - 4;
+      }) : [];
+      if (same.length) {
+        const t1 = dir === "down" ? Math.min.apply(null, same.map((c) => c.getBoundingClientRect().top)) : Math.max.apply(null, same.map((c) => c.getBoundingClientRect().top));
+        const line = same.filter((c) => Math.abs(c.getBoundingClientRect().top - t1) < 4), cx = b0.left + b0.width / 2;
+        line.sort((a, b) => Math.abs(a.getBoundingClientRect().left + a.getBoundingClientRect().width / 2 - cx) - Math.abs(b.getBoundingClientRect().left + b.getBoundingClientRect().width / 2 - cx));
+        F.set(line[0]);
+      } else if (j >= 0 && j < rows.length) F.set($(".chip.on", rows[j]) || $(".chip", rows[j]), true);
+      else if (j === rows.length) F.set($("#fOk"));
+      else if (j < 0 && !r) F.set($(".chip.on", rows[rows.length - 1]), true);
     } else if (dir === "up" && before && before.classList.contains("chip") && before.closest("#page")) {
       F.set($("#tabs .tab.on") || $("#tabs .tab"), true);
     } else if (dir === "down" && before && before.classList.contains("chip") && before.closest("#page") && $("#grid .card.f")) {

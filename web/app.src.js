@@ -72,8 +72,8 @@ function cached(key, ttl, fn) {
 const dbGet = path => cached("db:" + path, 30 * 60e3, () => getJSON(DB + path, DBH, 10000));
 const picOf = i => { const p = i.pic || {}; return p.normal || p.large || i.cover_url || (i.cover && i.cover.url) || ""; };
 const dbItem = i => ({ id: i.id, title: i.title, pic: picOf(i), rate: (i.rating && i.rating.value) || "", sub: i.card_subtitle || "", ep: i.episodes_info || "", type: i.type === "tv" ? "tv" : "movie", year: i.year || "" });
-async function dbList(kind, cat, type, start, count) {
-  const path = cat === "rec" ? `${kind}/recommend?start=${start}&count=${count}&tags=${encodeURIComponent(type)}`
+async function dbList(kind, cat, type, start, count, sort) {
+  const path = cat === "rec" ? `${kind}/recommend?start=${start}&count=${count}&tags=${encodeURIComponent(type)}${sort ? "&sort=" + sort : ""}`
     : `subject/recent_hot/${kind}?category=${encodeURIComponent(cat)}&type=${encodeURIComponent(type)}&start=${start}&limit=${count}`;
   const d = await dbGet(path);
   return { items: (d.items || []).filter(i => (i.type === "movie" || i.type === "tv") && i.id).map(dbItem), total: d.total || 0 };
@@ -481,12 +481,54 @@ const HOME_ROWS = [
   ["热门动漫", "tv", "tv", "tv_animation"], ["豆瓣高分", "movie", "豆瓣高分", "全部"], ["欧美剧", "tv", "tv", "tv_american"], ["韩剧", "tv", "tv", "tv_korean"],
   ["日剧", "tv", "tv", "tv_japanese"], ["华语电影", "movie", "热门", "华语"], ["纪录片", "tv", "tv", "tv_documentary"],
 ];
+// [名称, movie|tv, 榜单, 类型, 榜单翻完后接着用的豆瓣筛选标签]：豆瓣「近期热门」多数只有几十部，翻完接筛选接口（每种最多 500 部）
 const CHIPS = {
-  movie: [["热门", "movie", "热门", "全部"], ["最新", "movie", "最新", "全部"], ["高分", "movie", "豆瓣高分", "全部"], ["冷门佳片", "movie", "冷门佳片", "全部"], ["华语", "movie", "热门", "华语"], ["欧美", "movie", "热门", "欧美"], ["韩国", "movie", "热门", "韩国"], ["日本", "movie", "热门", "日本"]],
-  tv: [["综合", "tv", "tv", "tv"], ["国产剧", "tv", "tv", "tv_domestic"], ["欧美剧", "tv", "tv", "tv_american"], ["韩剧", "tv", "tv", "tv_korean"], ["日剧", "tv", "tv", "tv_japanese"], ["港剧", "tv", "rec", "电视剧,香港"], ["纪录片", "tv", "tv", "tv_documentary"]],
-  anime: [["热播", "tv", "tv", "tv_animation"], ["日漫", "tv", "rec", "动画,日本"], ["国漫", "tv", "rec", "动画,中国大陆"], ["欧美动画", "tv", "rec", "动画,美国"], ["动画电影", "movie", "rec", "动画"]],
-  show: [["综合", "tv", "show", "show"], ["国内", "tv", "show", "show_domestic"], ["国外", "tv", "show", "show_foreign"], ["真人秀", "tv", "rec", "综艺,真人秀"], ["脱口秀", "tv", "rec", "综艺,脱口秀"], ["音乐", "tv", "rec", "综艺,音乐"]],
+  movie: [["热门", "movie", "热门", "全部", ""], ["最新", "movie", "最新", "全部"], ["高分", "movie", "豆瓣高分", "全部"], ["冷门佳片", "movie", "冷门佳片", "全部"], ["华语", "movie", "热门", "华语", "华语"], ["欧美", "movie", "热门", "欧美", "欧美"], ["韩国", "movie", "热门", "韩国", "韩国"], ["日本", "movie", "热门", "日本", "日本"]],
+  tv: [["综合", "tv", "tv", "tv", "电视剧"], ["国产剧", "tv", "tv", "tv_domestic", "电视剧,中国大陆"], ["欧美剧", "tv", "tv", "tv_american", "电视剧,欧美"], ["韩剧", "tv", "tv", "tv_korean", "电视剧,韩国"], ["日剧", "tv", "tv", "tv_japanese", "电视剧,日本"], ["港剧", "tv", "rec", "电视剧,香港"], ["纪录片", "tv", "tv", "tv_documentary", "纪录片"]],
+  anime: [["热播", "tv", "tv", "tv_animation", "动画"], ["日漫", "tv", "rec", "动画,日本"], ["国漫", "tv", "rec", "动画,中国大陆"], ["欧美动画", "tv", "rec", "动画,美国"], ["动画电影", "movie", "rec", "动画"]],
+  show: [["综合", "tv", "show", "show", "综艺"], ["国内", "tv", "show", "show_domestic", "综艺,中国大陆"], ["国外", "tv", "show", "show_foreign", "综艺,国外"], ["真人秀", "tv", "rec", "综艺,真人秀"], ["脱口秀", "tv", "rec", "综艺,脱口秀"], ["音乐", "tv", "rec", "综艺,音乐"]],
 };
+// 分类页「筛选」：豆瓣 recommend 接口，tags=底标签,类型,地区,年代，sort=U 近期热门 / T 综合 / S 高分 / R 最新上映
+const YEAR0 = new Date().getFullYear();
+const F_YEARS = ["全部", String(YEAR0), String(YEAR0 - 1), "2020年代", "2010年代", "2000年代", "90年代", "80年代", "更早"];
+const F_SORTS = [["近期热门", "U"], ["综合", "T"], ["高分", "S"], ["最新上映", "R"]];
+const FILTERS = {
+  movie: { base: "", groups: [
+    ["类型", ["全部", "剧情", "喜剧", "爱情", "动作", "科幻", "动画", "悬疑", "犯罪", "惊悚", "冒险", "奇幻", "恐怖", "战争", "历史", "传记", "武侠", "灾难", "音乐", "歌舞", "西部", "纪录片"]],
+    ["地区", ["全部", "华语", "中国大陆", "中国香港", "中国台湾", "欧美", "美国", "英国", "法国", "德国", "意大利", "西班牙", "韩国", "日本", "印度", "泰国", "俄罗斯"]]] },
+  tv: { base: "电视剧", groups: [
+    ["类型", ["全部", "剧情", "爱情", "喜剧", "悬疑", "犯罪", "刑侦", "谍战", "古装", "武侠", "家庭", "都市", "青春", "职场", "历史", "战争", "奇幻", "科幻", "动作"]],
+    ["地区", ["全部", "华语", "中国大陆", "中国香港", "中国台湾", "欧美", "美国", "英国", "韩国", "日本", "泰国"]]] },
+  anime: { base: "动画", kinds: [["剧集", "tv"], ["电影", "movie"]], groups: [
+    ["类型", ["全部", "热血", "搞笑", "冒险", "奇幻", "科幻", "恋爱", "治愈", "校园", "运动"]],
+    ["地区", ["全部", "中国大陆", "日本", "美国", "欧美"]]] },
+  show: { base: "综艺", groups: [
+    ["类型", ["全部", "真人秀", "脱口秀", "音乐", "喜剧", "选秀", "歌舞", "旅行", "访谈", "推理"]],
+    ["地区", ["全部", "中国大陆", "中国香港", "中国台湾", "国外", "韩国", "日本", "美国"]]] },
+};
+// 筛选面板的各行：[行名, [[显示, 值]...]]
+function fRows(key) {
+  const d = FILTERS[key], rows = [];
+  if (d.kinds) rows.push(["形式", d.kinds]);
+  d.groups.forEach(g => rows.push([g[0], g[1].map(x => [x, x])]));
+  rows.push(["年代", F_YEARS.map(x => [x, x])]);
+  rows.push(["排序", F_SORTS]);
+  return rows;
+}
+function fDefault(key) { return fRows(key).map(r => r[1][0][1]); }
+function fSpec(key, v) {  // 选中值 → {kind, tags, sort}
+  const d = FILTERS[key], rows = fRows(key);
+  let kind = key === "movie" ? "movie" : "tv";
+  const tags = d.base ? [d.base] : [];
+  let sort = "U";
+  rows.forEach((r, i) => {
+    if (r[0] === "形式") kind = v[i]; else if (r[0] === "排序") sort = v[i]; else if (v[i] !== "全部") tags.push(v[i]);
+  });
+  return { kind, tags: tags.join(","), sort };
+}
+function fLabel(key, v) {
+  return fRows(key).map((r, i) => { const o = r[1].find(x => x[1] === v[i]) || r[1][0]; return o[0] === "全部" ? "全部" + r[0] : o[0]; }).join(" · ");
+}
 const histAll = () => { try { return APP ? JSON.parse(NN.history()) : store.get("hist", []); } catch (e) { return []; } };
 const histKey = it => (it.id ? `${it.type || "movie"}:${it.id}` : `t:${canon(it.title)}`);
 const fmtT = ms => { const s = Math.floor((ms || 0) / 1000); return s >= 3600 ? `${Math.floor(s / 3600)}:${String(Math.floor(s / 60) % 60).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}` : `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`; };
@@ -546,42 +588,87 @@ const PAGES = {
 
   cat(tok, key, restore) {
     const chips = CHIPS[key], name = { movie: "电影", tv: "剧集", anime: "动漫", show: "综艺" }[key];
-    let ci = restore ? store.get("chip:" + key, 0) : 0;   // 从一级菜单进来总是第一个；从详情页返回才恢复原来的
-    if (!chips[ci]) ci = 0;
+    let ci = restore ? store.get("chip:" + key, 0) : 0;   // 从一级菜单进来总是第一个；从详情页返回才恢复原来的。"f" 表示在用筛选
+    if (ci !== "f" && !chips[ci]) ci = 0;
+    let fv = store.get("flt:" + key, null), def = fDefault(key);
+    if (!Array.isArray(fv) || fv.length !== def.length) fv = def.slice();
+    if (ci === "f" && fv.join() === def.join()) ci = 0;
     $("#page").innerHTML = `<div class="scroll" data-pad="6"><div class="pagehead sec cathead"><h2>${name}</h2><span id="cnt" style="display:none"></span>
-      <div class="chips" data-g="chips">${chips.map((c, i) => `<div class="chip f${i === ci ? " on" : ""}" data-i="${i}">${c[0]}</div>`).join("")}</div></div>
+      <div class="chips" data-g="chips">${chips.map((c, i) => `<div class="chip f${i === ci ? " on" : ""}" data-i="${i}">${c[0]}</div>`).join("")}<div class="chip f fchip${ci === "f" ? " on" : ""}" data-i="f">筛选</div></div></div>
+      <div class="fsum" id="fsum"></div>
       <div class="grid" id="grid">${skel(14)}</div></div>`;
-    const grid = $("#grid");
-    let start = 0, busy = false, end = false, my = 0;
+    const grid = $("#grid"), seen = {};
+    let start = 0, start2 = 0, phase = 0, busy = false, end = false, my = 0;
+    const sum = () => { const e = $("#fsum"); e.textContent = ci === "f" ? fLabel(key, fv) : ""; e.style.display = ci === "f" ? "" : "none"; };
+    // 当前列表的数据来源：先榜单（phase 0），翻完有备用标签就接筛选接口（phase 1）
+    const src = () => {
+      if (ci === "f") { const f = fSpec(key, fv); return { kind: f.kind, cat: "rec", type: f.tags, sort: f.sort }; }
+      const c = chips[ci];
+      if (phase === 1) return { kind: c[1], cat: "rec", type: c[4], sort: "U" };
+      return { kind: c[1], cat: c[2], type: c[3], sort: "" };
+    };
     const load = async first => {
       if (busy || end) return;
       busy = true;
-      const c = chips[ci], me = ++my;
+      const me = ++my, q = src(), ph = phase;
       try {
-        const d = await dbList(c[1], c[2], c[3], start, 28);
+        const d = await dbList(q.kind, q.cat, q.type, ph === 1 ? start2 : start, 28, q.sort);
         if (tok !== routeTok || me !== my) return;
         if (first) grid.innerHTML = "";
-        grid.insertAdjacentHTML("beforeend", d.items.map(it => card(Object.assign(it, { type: c[1] === "tv" ? "tv" : it.type }), { sub: short(it.sub).split(" · ")[0] || it.ep, cls: "grid-item" })).join(""));
-        bindCards(grid, el => { const items = $$(".card", grid); if (items.indexOf(el) > items.length - 15) load(); });
-        start += d.items.length;
-        end = !d.items.length || (d.total && start >= d.total);
+        const got = d.items.length;
+        const items = d.items.filter(it => { const k = it.id; if (seen[k]) return false; seen[k] = 1; return true; });
+        grid.insertAdjacentHTML("beforeend", items.map(it => card(Object.assign(it, { type: q.kind === "tv" ? "tv" : it.type }), { sub: short(it.sub).split(" · ")[0] || it.ep, cls: "grid-item" })).join(""));
+        bindCards(grid, el => { const all = $$(".card", grid); if (all.indexOf(el) > all.length - 15) load(); });
+        if (ph === 1) start2 += got; else start += got;
+        const done = !got || (d.total && (ph === 1 ? start2 : start) >= d.total);
+        const c = ci === "f" ? null : chips[ci];
+        if (done && ph === 0 && c && c[4] != null) { phase = 1; end = false; } else end = done;
         $("#cnt").textContent = "";
-        if (first && !d.items.length) grid.innerHTML = `<div class="empty">暂无内容</div>`;
+        if (first && !grid.children.length) grid.innerHTML = `<div class="empty">暂无内容</div>`;
+        busy = false;
+        // 这一页全是重复的（榜单和筛选接口重合），或刚切到接续阶段：马上再拉一页
+        if (!end && (!items.length || (ph === 0 && phase === 1)) && grid.children.length < 28) load();
+        return;
       } catch (e) { if (first) grid.innerHTML = `<div class="empty">豆瓣数据加载失败</div>`; }
       busy = false;
     };
+    const reload = () => {
+      Object.keys(seen).forEach(k => delete seen[k]);
+      start = 0; start2 = 0; phase = 0; end = false; busy = false; my++; grid.innerHTML = skel(14); sum(); load(true);
+    };
+    const mark = () => $$("#page .chips .chip").forEach(x => x.classList.toggle("on", x.dataset.i === String(ci)));
     const pick = ch => {
-      if (+ch.dataset.i === ci) return;
+      if (ch.dataset.i === String(ci)) return;
       ci = +ch.dataset.i; store.set("chip:" + key, ci);
-      $$(".chip").forEach(x => x.classList.toggle("on", x === ch));
-      start = 0; end = false; busy = false; my++; grid.innerHTML = skel(14); load(true);
+      mark(); reload();
+    };
+    const openF = fch => {
+      const rows = fRows(key), v = fv.slice();
+      openLayer(`<div class="panel fpanel"><h2>筛选${name}</h2>${rows.map((r, ri) => `<div class="frow"><span class="fh">${r[0]}</span><div class="chips" data-g="fr${ri}">${r[1].map(o => `<div class="chip f${o[1] === v[ri] ? " on" : ""}" data-r="${ri}" data-v="${esc(o[1])}">${esc(o[0])}</div>`).join("")}</div></div>`).join("")}
+        <div class="acts" data-g="facts"><div class="btn f" id="fClr">清空</div><div class="btn pri f" id="fOk">确定</div></div></div>`, ".frow .chip.on");
+      const l = $("#layer");
+      const sel = c => { const ri = +c.dataset.r; v[ri] = c.dataset.v; $$(`.chip[data-r="${ri}"]`, l).forEach(x => x.classList.toggle("on", x === c)); };
+      $$(".frow .chip", l).forEach(c => { c._onfocus = () => sel(c); c._ok = () => sel(c); });
+      $("#fClr")._ok = () => { const d0 = fDefault(key); d0.forEach((x, i) => { v[i] = x; }); $$(".frow .chip", l).forEach(c => c.classList.toggle("on", c.dataset.v === v[+c.dataset.r])); };
+      $("#fOk")._ok = closeLayer;
+      l._onclose = () => {   // 关面板（确定或返回键）时才刷新，面板里挑来挑去不重载
+        const isDef = v.join() === def.join(), was = ci;
+        fv = v.slice(); store.set("flt:" + key, fv);
+        if (isDef) { if (was !== "f") return; ci = 0; } else { if (was === "f" && grid._fv === fv.join()) return; ci = "f"; }
+        grid._fv = fv.join();
+        store.set("chip:" + key, ci); mark(); reload();
+        l._prev = $("#page .chip.on") || fch;
+      };
     };
     $$(".chip", $("#page")).forEach(ch => {
+      if (ch.dataset.i === "f") { ch._ok = () => { clearTimeout(pick._t); openF(ch); }; return; }
       ch._onfocus = () => { clearTimeout(pick._t); pick._t = setTimeout(() => { if (F.cur === ch) pick(ch); }, 280); };
       ch._ok = () => { clearTimeout(pick._t); pick(ch); const c = $("#grid .card.f"); if (c) F.set(c); };
     });
-    F.set($(".chip.on"));
+    if (ci === "f") grid._fv = fv.join();
+    F.set($("#page .chip.on"));
     $("#page")._more = () => load();
+    sum();
     load(true);
   },
 
@@ -997,6 +1084,20 @@ document.addEventListener("keydown", e => {
     const ri = ring ? ring.indexOf(before) : -1;
     if (ri >= 0 && ring.length > 1 && (dir === "right" ? ri === ring.length - 1 : ri === 0)) {  // 一级、二级菜单到头了再按：绕到另一头
       F.set(ring[dir === "right" ? 0 : ring.length - 1]);
+    } else if ((dir === "up" || dir === "down") && before && before.closest(".fpanel")) {  // 筛选面板：上下换行时落在那一行已选的项上，不改别行
+      const p = before.closest(".fpanel"), rows = $$(".frow", p), r = before.closest(".frow"), i = r ? rows.indexOf(r) : rows.length;
+      const j = i + (dir === "down" ? 1 : -1), b0 = before.getBoundingClientRect();
+      // 一行选项太多折成两行时，先在本行的上下两排之间走
+      const same = r ? $$(".chip", r).filter(c => { const t = c.getBoundingClientRect().top; return dir === "down" ? t > b0.top + 4 : t < b0.top - 4; }) : [];
+      if (same.length) {
+        const t1 = dir === "down" ? Math.min.apply(null, same.map(c => c.getBoundingClientRect().top)) : Math.max.apply(null, same.map(c => c.getBoundingClientRect().top));
+        const line = same.filter(c => Math.abs(c.getBoundingClientRect().top - t1) < 4), cx = b0.left + b0.width / 2;
+        line.sort((a, b) => Math.abs(a.getBoundingClientRect().left + a.getBoundingClientRect().width / 2 - cx) - Math.abs(b.getBoundingClientRect().left + b.getBoundingClientRect().width / 2 - cx));
+        F.set(line[0]);
+      } else
+      if (j >= 0 && j < rows.length) F.set($(".chip.on", rows[j]) || $(".chip", rows[j]), true);
+      else if (j === rows.length) F.set($("#fOk"));
+      else if (j < 0 && !r) F.set($(".chip.on", rows[rows.length - 1]), true);
     } else if (dir === "up" && before && before.classList.contains("chip") && before.closest("#page")) {  // 二级菜单按上：回一级菜单
       F.set($("#tabs .tab.on") || $("#tabs .tab"), true);
     } else if (dir === "down" && before && before.classList.contains("chip") && before.closest("#page") && $("#grid .card.f")) {  // 二级菜单按下：进片子
